@@ -1,0 +1,16 @@
+node_modules/
+lib/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.vite/
+.vitest/
+*.log
+.idea/
+.vscode/
+
+# tsc emit next to hand-written shims (keep types/shims/*.ts)
+types/shims/*.d.ts
+types/shims/*.js
+types/shims/*.map

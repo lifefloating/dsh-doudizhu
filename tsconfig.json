@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2024"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "types": ["node"],
+    "paths": {
+      "@deepseek-ai/cordis": ["./types/shims/cordis.ts"],
+      "@deepseek-ai/schemastery": ["./types/shims/schemastery.ts"],
+      "@deepseek-ai/dsh-settings": ["./types/shims/dsh-settings.ts"],
+      "@deepseek-ai/dsh-client-runtime/client": ["./types/shims/dsh-client-runtime.ts"],
+      "@deepseek-ai/dsh-client-ui-slots": ["./types/shims/dsh-client-ui-slots.ts"],
+      "@deepseek-ai/dsh-client-ui-primitives": ["./types/shims/dsh-client-ui-primitives.ts"],
+      "@deepseek-ai/dsh-client-ui-settings/client": ["./types/shims/dsh-client-ui-settings.ts"]
+    }
+  },
+  "include": ["src", "types", "tests", "scripts"]
+}

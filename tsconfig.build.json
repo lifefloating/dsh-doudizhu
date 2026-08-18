@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib/types",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src", "types/css-modules.d.ts", "types/shims/cordis.ts", "types/shims/schemastery.ts", "types/shims/dsh-settings.ts"],
+  "exclude": ["src/client", "src/join"]
+}

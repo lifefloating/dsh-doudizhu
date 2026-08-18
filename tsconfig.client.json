@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib/types",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": [
+    "src/client",
+    "src/join",
+    "src/types.ts",
+    "src/net/protocol.ts",
+    "types/css-modules.d.ts",
+    "types/shims/dsh-client-runtime.ts",
+    "types/shims/dsh-client-ui-settings.ts",
+    "types/shims/dsh-client-ui-slots.ts",
+    "types/shims/dsh-client-ui-primitives.ts"
+  ]
+}
