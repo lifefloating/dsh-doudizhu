@@ -43,6 +43,7 @@ function typeOf(name: string): string {
   if (name.endsWith('.js')) return 'application/javascript; charset=utf-8'
   if (name.endsWith('.css')) return 'text/css; charset=utf-8'
   if (name.endsWith('.svg')) return 'image/svg+xml'
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
   if (name.endsWith('.map')) return 'application/json'
   return 'application/octet-stream'
 }

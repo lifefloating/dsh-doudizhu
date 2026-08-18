@@ -67,6 +67,12 @@ const config: UserConfig = {
   copy: [
     { from: 'src/join/join.html', to: 'lib/join/index.html' },
     { from: 'src/client/assets/card-back-whale.svg', to: 'lib/join/card-back-whale.svg' },
+    { from: 'src/client/assets/joker-red.jpg', to: 'lib/join/joker-red.jpg' },
+    { from: 'src/client/assets/joker-black.jpg', to: 'lib/join/joker-black.jpg' },
+    { from: 'src/client/assets/face-j.jpg', to: 'lib/join/face-j.jpg' },
+    { from: 'src/client/assets/face-q.jpg', to: 'lib/join/face-q.jpg' },
+    { from: 'src/client/assets/face-k.jpg', to: 'lib/join/face-k.jpg' },
+    { from: 'src/client/assets/face-a.jpg', to: 'lib/join/face-a.jpg' },
     { from: 'src/client/assets/join.css', to: 'lib/join/join.css' },
   ],
 }

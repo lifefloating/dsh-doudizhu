@@ -2,6 +2,13 @@ import type { CardId } from '../types.ts'
 import css from './styles.module.css'
 
 const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '♦' }
+const ASSET = '/doudizhu/assets'
+const FACE_ART: Record<string, string> = {
+  J: `${ASSET}/face-j.jpg`,
+  Q: `${ASSET}/face-q.jpg`,
+  K: `${ASSET}/face-k.jpg`,
+  A: `${ASSET}/face-a.jpg`,
+}
 
 function cardBase(card: CardId | string): string {
   return String(card).split('~')[0] ?? String(card)
@@ -30,18 +37,23 @@ export function CardFace({
   if (raw === 'BJ' || raw === 'RJ' || rankOf(card) === 'BJ' || rankOf(card) === 'RJ') {
     const red = rankOf(card) === 'RJ'
     return (
-      <div className={`${css.cardFace} ${red ? css.red : ''} ${selected ? css.selected : ''}`}>
-        <span className={css.rank}>{red ? '大王' : '小王'}</span>
-        <span className={css.suit}>{red ? '★' : '☆'}</span>
+      <div className={`${css.cardFace} ${css.jokerFace} ${red ? css.red : ''} ${selected ? css.selected : ''}`}>
+        <img
+          className={css.jokerArt}
+          src={red ? `${ASSET}/joker-red.jpg` : `${ASSET}/joker-black.jpg`}
+          alt=""
+        />
       </div>
     )
   }
   const suit = raw[0] ?? 'S'
   const rank = raw.slice(1)
   const red = suit === 'H' || suit === 'D'
+  const art = FACE_ART[rank]
   return (
     <div className={`${css.cardFace} ${red ? css.red : ''} ${selected ? css.selected : ''} ${wild ? css.wild : ''}`}>
       <span className={css.rank}>{rank}{wild ? '*' : ''}</span>
+      {art ? <img className={css.faceArt} src={art} alt="" /> : null}
       <span className={css.suit}>{SUIT_GLYPH[suit] ?? suit}</span>
     </div>
   )

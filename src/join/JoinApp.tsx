@@ -96,7 +96,6 @@ export function JoinApp() {
             onPass={() => { command({ type: 'pass', nonce: crypto.randomUUID() }) }}
             onReady={(ready) => { command({ type: 'ready', ready }) }}
             onChat={(text) => { command({ type: 'chat', text }) }}
-            useSvg
           />
         )}
     </div>

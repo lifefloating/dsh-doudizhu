@@ -24,9 +24,13 @@ export function apply(ctx: Context, config: PluginConfig): void {
       void manager.dispose()
     }
   })
+  let currentConfig = (): PluginConfig => config
   installSettingsSection(ctx, DOUDIZHU_NS, Config, config, {
-    setSource: (current) => { manager.replaceConfig(current()) },
-    onChange: () => { /* live defaults only; in-hand state stays frozen */ },
+    setSource: (current) => {
+      currentConfig = current
+      manager.replaceConfig(current())
+    },
+    onChange: () => { manager.replaceConfig(currentConfig()) },
     validate: (value) => { resolveConfig(value) },
   })
   ctx.inject(['systemPrompt'], (promptCtx) => {

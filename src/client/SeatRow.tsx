@@ -4,11 +4,10 @@ import { SeatAvatar } from './SeatAvatar.tsx'
 import css from './styles.module.css'
 
 export function SeatRow({
-  seat, align = 'left', useSvg = false,
+  seat, align = 'left',
 }: {
   seat: SeatState
   align?: 'left' | 'right' | 'center'
-  useSvg?: boolean
 }) {
   const alignClass = align === 'right' ? css.seatRight : align === 'center' ? css.seatCenter : ''
   return (
@@ -19,7 +18,7 @@ export function SeatRow({
         {seat.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
       </div>
       {seat.ready && seat.role === 'empty' ? <div className={css.ready}>准备</div> : null}
-      {seat.playerId ? <CardBack count={seat.cardsLeft} useSvg={useSvg} /> : null}
+      {seat.playerId ? <CardBack count={seat.cardsLeft} /> : null}
       <div className={css.muted}>{seat.connected ? '在线' : seat.playerId ? '离线' : ''}</div>
     </div>
   )

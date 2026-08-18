@@ -18,6 +18,19 @@ describe('RoomManager', () => {
     await manager.dispose()
   })
 
+  it('applies publicBaseUrl to later rooms after replaceConfig', async () => {
+    const manager = new RoomManager(null, {}, null)
+    const before = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '旧房' })
+    expect(before.shareable).toBe(false)
+    expect(before.sitUrl.startsWith('http://127.0.0.1:')).toBe(true)
+    manager.replaceConfig({ publicBaseUrl: 'https://example.ngrok-free.dev' })
+    expect(before.shareable).toBe(false)
+    const after = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '新房' })
+    expect(after.shareable).toBe(true)
+    expect(after.sitUrl.startsWith('https://example.ngrok-free.dev/doudizhu/join?')).toBe(true)
+    await manager.dispose()
+  })
+
   it('does not fill empty seats with bots', async () => {
     const manager = new RoomManager(null, {}, null)
     const created = await manager.createRoom({ stakeM: 1, maxMultiplier: 8 })

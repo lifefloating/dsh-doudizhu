@@ -9,7 +9,7 @@ import { selectionLegal } from './store.ts'
 import css from './styles.module.css'
 
 export function TableView({
-  view, selected, onToggle, onBid, onDouble, onPlay, onPass, onChat, useSvg = false,
+  view, selected, onToggle, onBid, onDouble, onPlay, onPass, onChat,
 }: {
   view: PlayerView
   selected: CardId[]
@@ -20,7 +20,6 @@ export function TableView({
   onPass: () => void
   onReady?: (ready: boolean) => void
   onChat: (text: string) => void
-  useSvg?: boolean
 }) {
   const seats = view.room.seats
   const count = view.room.seatCount ?? (seats.length >= 4 ? 4 : 3)
@@ -58,7 +57,6 @@ export function TableView({
             key={seat.seat}
             seat={seat}
             align={index === opponents.length - 1 ? 'right' : index === 0 ? 'left' : 'center'}
-            useSvg={useSvg}
           />
         ))}
       </div>
@@ -72,7 +70,7 @@ export function TableView({
       <div className={css.bottom}>
         {view.bottom
           ? view.bottom.map((card) => <CardFace key={card} card={card} laiZiRanks={laiZi} />)
-          : <CardBack count={holeCount(count)} useSvg={useSvg} />}
+          : <CardBack count={holeCount(count)} />}
       </div>
       {view.you.spectator
         ? <div className={css.hint}>观战中。只能看见已打出的牌与公开区。</div>
