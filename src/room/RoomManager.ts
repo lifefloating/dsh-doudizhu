@@ -25,6 +25,7 @@ export interface JoinRequest {
   invite: string
   displayName: string
   role: 'sit' | 'watch'
+  local?: boolean
 }
 
 export interface JoinResult {
@@ -250,9 +251,14 @@ export class RoomManager {
     const displayName = sanitizeDisplayName(req.displayName)
     const playerId = newPlayerId()
     await this.ledger.ensurePlayer(playerId, displayName, sanitizeAvatarUrl(null, this.config.routePrefix))
-    const sitOk = sha256Hex(`${live.secret}|sit|${req.invite}`) === live.sitInviteHash
-    const watchOk = sha256Hex(`${live.secret}|watch|${req.invite}`) === live.watchInviteHash
-    if (!sitOk && !watchOk) throw fail('auth', 'invalid invite')
+    const invite = req.invite.trim()
+    const sitOk = invite
+      ? sha256Hex(`${live.secret}|sit|${invite}`) === live.sitInviteHash
+      : Boolean(req.local)
+    const watchOk = invite
+      ? sha256Hex(`${live.secret}|watch|${invite}`) === live.watchInviteHash
+      : false
+    if (!sitOk && !watchOk) throw fail('auth', invite ? 'invalid invite' : 'room not found')
     const empty = this.firstEmptySeat(live)
     const canSit = live.room.phase === 'waiting' && empty !== null && req.role !== 'watch'
     let seat: Seat | null = null

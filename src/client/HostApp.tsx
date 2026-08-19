@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_STAKE_M, DEFAULT_WELCOME_ATOMS } from '../settle/math.ts'
 import type { CardId, ClientCommand, PlayerView, SeatCount } from '../types.ts'
-import { connectChannel, createRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
+import { connectChannel, createRoom, joinRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
 import { RoomCodeBar } from './InviteDialog.tsx'
 import { LobbyView } from './LobbyView.tsx'
 import { SettlementView } from './SettlementView.tsx'
@@ -15,8 +15,13 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   const [seatCount, setSeatCount] = useState<SeatCount>(3)
   const [laiZi, setLaiZi] = useState(false)
   const [title, setTitle] = useState('好友局')
+  const [tab, setTab] = useState<'create' | 'join'>('create')
+  const [joinCode, setJoinCode] = useState('')
+  const [joinInvite, setJoinInvite] = useState('')
+  const [joinName, setJoinName] = useState('好友')
   const [state, setState] = useState(emptyState)
   const [creating, setCreating] = useState(false)
+  const [joining, setJoining] = useState(false)
   const [roomId, setRoomId] = useState<string | null>(null)
   const seq = useMemo(() => ({ value: 0 }), [])
 
@@ -56,24 +61,50 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         roomCode: created.roomCode,
       }))
       location.hash = `#/doudizhu/room/${created.roomId}`
-      connectChannel(created.wsTicket, (event) => {
-        if (event.type === 'snapshot') {
-          seq.value = event.seq
-          applyView(event.view)
-        }
-        if (event.type === 'settled') {
-          seq.value = event.seq
-          setState((prev) => ({ ...prev, settlement: event.settlement }))
-        }
-        if (event.type === 'reject') {
-          setState((prev) => ({ ...prev, error: event.reason }))
-        }
-      }, { roomId: created.roomId, seq: () => seq.value })
+      listenRoom(created.roomId, created.wsTicket)
     } catch (error) {
       setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'create failed' }))
     } finally {
       setCreating(false)
     }
+  }
+
+  const enterRoom = async (): Promise<void> => {
+    setJoining(true)
+    setState((prev) => ({ ...prev, error: null }))
+    try {
+      const result = await joinRoom({
+        roomCode: joinCode.trim(),
+        invite: joinInvite.trim(),
+        displayName: joinName,
+        role: 'sit',
+      })
+      setRoomId(result.roomId)
+      applyView(result.view)
+      setState((prev) => ({ ...prev, roomCode: result.view.room.roomCode }))
+      location.hash = `#/doudizhu/room/${result.roomId}`
+      listenRoom(result.roomId, result.wsTicket)
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'join failed' }))
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  const listenRoom = (nextRoomId: string, ticket: string): void => {
+    connectChannel(ticket, (event) => {
+      if (event.type === 'snapshot') {
+        seq.value = event.seq
+        applyView(event.view)
+      }
+      if (event.type === 'settled') {
+        seq.value = event.seq
+        setState((prev) => ({ ...prev, settlement: event.settlement }))
+      }
+      if (event.type === 'reject') {
+        setState((prev) => ({ ...prev, error: event.reason }))
+      }
+    }, { roomId: nextRoomId, seq: () => seq.value })
   }
 
   const command = (cmd: ClientCommand): void => {
@@ -93,6 +124,8 @@ export function HostApp({ onClose }: { onClose: () => void }) {
       {!state.view
         ? (
           <LobbyView
+            tab={tab}
+            onTab={setTab}
             title={title}
             stakeM={stakeM}
             maxMultiplier={maxMultiplier}
@@ -111,6 +144,16 @@ export function HostApp({ onClose }: { onClose: () => void }) {
             watchUrl={state.watchUrl}
             shareable={state.shareable}
             welcomeAtoms={DEFAULT_WELCOME_ATOMS}
+            join={{
+              code: joinCode,
+              invite: joinInvite,
+              name: joinName,
+              joining,
+              onCode: setJoinCode,
+              onInvite: setJoinInvite,
+              onName: setJoinName,
+              onJoin: () => { void enterRoom() },
+            }}
           />
         )
         : state.settlement && state.view.room.phase === 'waiting'

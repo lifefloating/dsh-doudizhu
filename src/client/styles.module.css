@@ -57,22 +57,84 @@
 }
 
 .card {
-  max-width: 640px;
+  max-width: 760px;
   margin: 0 auto;
   background: var(--dsw-alias-bg-layer-3, #fff);
   border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
-  border-radius: 12px;
-  padding: 20px 20px 16px;
+  border-radius: 14px;
+  padding: 28px 28px 24px;
 }
 
 .card h2, .card h3 {
   margin: 0 0 4px;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   line-height: 1.4;
 }
 
+.card > .primary {
+  width: 100%;
+  margin-top: 4px;
+  align-self: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin: -4px 0 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
+}
+
+.tab {
+  appearance: none;
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.tabActive {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  border-bottom-color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
 .row { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
+
+.createFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 4px;
+}
+
+.createFields > .field {
+  min-width: 0;
+}
+
+.createFields > .field + .field {
+  border-top: 0;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.createFields .select,
+.createFields .input {
+  width: 100%;
+  box-sizing: border-box;
+}
 
 .field {
   display: flex;
@@ -91,15 +153,73 @@
 
 .fieldRow { flex-direction: row; align-items: center; gap: 8px; }
 
+.joinForm {
+  display: flex;
+  flex-direction: column;
+}
+
+.joinFields {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.joinFields .primary {
+  width: 100%;
+  height: 44px;
+  font-weight: 600;
+}
+
+.joinInline {
+  display: flex;
+  gap: 32px;
+  padding: 14px 0;
+}
+
+.joinField {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.joinField .settingsLabel {
+  flex: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.joinField .input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .joinInline {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .joinFields .input {
+    height: 44px;
+  }
+}
+
 .select, .input {
-  height: 34px;
-  padding: 0 12px;
+  height: 40px;
+  padding: 0 14px;
   border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--dsw-alias-bg-layer-3, #fff);
   color: var(--dsw-alias-label-primary, #1a1a1a);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .select:focus-visible, .input:focus-visible {
@@ -109,11 +229,11 @@
 
 .primary, .ghost, .danger {
   appearance: none;
-  border-radius: 8px;
-  padding: 5px 14px;
+  border-radius: 10px;
+  padding: 7px 16px;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -207,12 +327,32 @@
   gap: 4px;
 }
 
-.selfSeat {
+.selfRow {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
   flex: none;
+}
+
+.selfSeat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+}
+
+.selfRow .hand {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+  padding-left: 0;
 }
 
 .roleHero {
@@ -420,6 +560,14 @@
   line-height: 1;
   text-shadow: 0 0 3px #fff, 0 0 6px #fff;
 }
+.plainFace {
+  justify-content: center;
+  align-items: center;
+}
+.suitCenter {
+  font-size: 36px;
+  line-height: 1;
+}
 .jokerFace {
   padding: 0;
   justify-content: center;
@@ -437,6 +585,8 @@
   .table { padding: 8px 10px 6px; }
   .avatar { width: 56px; height: 56px; }
   .roleHeroImg { width: 96px; height: 96px; }
+  .selfRow { gap: 8px; }
+  .selfSeat { flex-direction: column; gap: 4px; }
 
   .seatHead,
   .seatRight .seatHead {
@@ -467,20 +617,42 @@
   }
 }
 
+.sidebarSlot {
+  width: 100%;
+  margin: 0 2px 8px;
+  box-sizing: border-box;
+}
+.sidebarSlotRail {
+  width: 36px;
+  margin: 0 0 12px;
+  align-self: flex-start;
+}
 .sidebarBtn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
-  border: 0;
-  background: transparent;
+  height: 38px;
+  border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
+  background: var(--dsw-alias-button-elevated-fill, #fff);
   color: inherit;
   cursor: pointer;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  box-sizing: border-box;
   font: inherit;
+  font-size: 14px;
+  font-weight: 500;
 }
-.sidebarBtn:hover { background: var(--dsw-alias-bg-module-platform, rgba(0, 0, 0, 0.04)); }
+.sidebarBtn:hover { background: var(--dsw-alias-button-floating-hover, rgba(0, 0, 0, 0.04)); }
+.sidebarBtnRail {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
 
 .inviteBox {
   display: flex;
@@ -492,7 +664,7 @@
 .codeRow, .codeBar, .codeEdit {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
@@ -517,6 +689,12 @@
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+
+.codeInput::placeholder {
+  letter-spacing: 0;
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .titleBtn {

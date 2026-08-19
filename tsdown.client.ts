@@ -1,3 +1,3 @@
 import { clientConfig } from './scripts/tsdown.client.ts'
 
-export default clientConfig('dsh-doudizhu', 'src/client/index.tsx')
+export default clientConfig('dsh-poker', 'src/client/index.tsx')

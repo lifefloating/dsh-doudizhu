@@ -19,7 +19,6 @@ src/join/             好友加入页（独立 IIFE）
 types/shims/*.ts      给 typecheck 用的手写桩，不是真实运行时
 scripts/              从官方复制的 client bundle 预设
 lib/                  构建产物，不提交
-.changeset/           pnpm change 写出的发版意图，不是 @changesets/cli
 ```
 
 ## 命令
@@ -30,13 +29,9 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm verify
-pnpm change       # 写 .changeset/*.md，跟代码一起提交
-pnpm version -r   # 吃掉 pending intents，改 version / CHANGELOG
 ```
 
-合进 `main` 后 Release workflow 直接 `pnpm version -r` 再 `pnpm publish`（OIDC，不要 `NPM_TOKEN`，不要 `changesets/action`）。
-
-`verify` = typecheck + build + test。CI 跑完还会 `git diff --exit-code`，别把构建产物留在工作区。
+`verify` = typecheck + build + test。`release:check` 还会校验 npm 包边界。CI 跑完还会 `git diff --exit-code`，别把构建产物留在工作区。未经用户明确授权，不推送、不发布 npm 包。
 
 本地挂进 web profile：
 

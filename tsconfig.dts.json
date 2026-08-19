@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib/types-emit",
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src", "types/shims/*.ts", "types/css-modules.d.ts"]
+}

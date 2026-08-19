@@ -74,11 +74,13 @@ async function handleApi(
     assertOrigin(req, config.publicBaseUrl)
     assertMutatingHeaders(req)
     const body = await readJson<{ roomCode: string; invite: string; displayName: string; role: 'sit' | 'watch' }>(req)
+    const loopback = isLoopbackHost(header(req, 'host'), req.socket.remoteAddress)
     const result = await manager.join({
       roomCode: String(body.roomCode ?? ''),
       invite: String(body.invite ?? ''),
       displayName: String(body.displayName ?? ''),
       role: body.role === 'watch' ? 'watch' : 'sit',
+      local: loopback,
     })
     json(res, 200, {
       playerId: result.playerId,

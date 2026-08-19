@@ -8,12 +8,15 @@ export const ROLE_ICONS = {
   landlordB: `${ASSET}/role-landlord-b.png`,
   farmer: `${ASSET}/role-farmer.png`,
   farmerB: `${ASSET}/role-farmer-b.png`,
+  farmerC: `${ASSET}/role-farmer-c.png`,
   spectator: `${ASSET}/role-spectator.png`,
 } as const
 
+const FARMER_ICONS = [ROLE_ICONS.farmer, ROLE_ICONS.farmerB, ROLE_ICONS.farmerC] as const
+
 export function roleIconSrc(role: SeatState['role'], seat = 0): string {
-  if (role === 'landlord') return seat % 2 === 0 ? ROLE_ICONS.landlord : ROLE_ICONS.landlordB
-  return seat % 2 === 0 ? ROLE_ICONS.farmer : ROLE_ICONS.farmerB
+  if (role === 'landlord') return ROLE_ICONS.landlord
+  return FARMER_ICONS[Math.abs(seat) % FARMER_ICONS.length] ?? ROLE_ICONS.farmer
 }
 
 export function SeatAvatar({

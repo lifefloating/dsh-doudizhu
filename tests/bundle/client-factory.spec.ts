@@ -14,7 +14,7 @@ describe('client factory bundle', () => {
   it('lib/client.js calls __ModuleLoader__.load', () => {
     const source = readFileSync(join(process.cwd(), 'lib/client.js'), 'utf8')
     expect(source).toContain('__ModuleLoader__.load')
-    expect(source).toContain('id: "dsh-doudizhu"')
+    expect(source).toContain('id: "dsh-poker"')
     expect(source).toMatch(/const inject = \[[\s\S]*settingsScope/)
   })
 
@@ -22,6 +22,8 @@ describe('client factory bundle', () => {
     const source = readFileSync(join(process.cwd(), 'src/client/slots.tsx'), 'utf8')
     expect(source).toContain("name: 'sidebar.footer.action'")
     expect(source).toContain("id: 'doudizhu'")
+    expect(source).toContain('createPortal')
+    expect(source).toContain('findNewSessionAnchor')
     expect(source).not.toMatch(/name: 'sidebar\.footer\.action'[\s\S]{0,80}key:/)
     expect(source).toContain("name: 'shell.overlay'")
     expect(source).toContain("name: 'settings.plugin.item'")

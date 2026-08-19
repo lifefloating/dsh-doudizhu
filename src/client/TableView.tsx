@@ -39,7 +39,7 @@ export function TableView({
         <div>
           {view.room.title || '好友局'} · {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · {view.bid ? `${view.bid}倍` : '未叫'} · 阶段 {phaseLabel(phase)}
         </div>
-        <div className={css.muted}>余额 {view.yourAvailableAtoms} · 冻结 {view.yourEscrowAtoms}</div>
+        <div className={css.muted}>余额 {formatM(parseAtoms(view.yourAvailableAtoms))} · 冻结 {formatM(parseAtoms(view.yourEscrowAtoms))}</div>
       </div>
       {seconds !== null
         ? (
@@ -74,23 +74,27 @@ export function TableView({
       <div className={css.bottom}>
         {view.bottom
           ? view.bottom.map((card) => <CardFace key={card} card={card} laiZiRanks={laiZi} />)
-          : <CardBack count={holeCount(count)} />}
+          : phase !== 'waiting'
+            ? <CardBack count={holeCount(count)} />
+            : null}
       </div>
       {view.you.spectator
         ? (
           <>
-            <div className={css.selfSeat}>
-              <SeatAvatar spectator />
-              <div className={css.seatName}>
-                观战
-                <span className={css.badge}>观战</span>
+            <div className={css.selfRow}>
+              <div className={css.selfSeat}>
+                <SeatAvatar spectator />
+                <div className={css.seatName}>
+                  观战
+                  <span className={css.badge}>观战</span>
+                </div>
               </div>
             </div>
             <div className={css.hint}>观战中。只能看见已打出的牌与公开区。</div>
           </>
         )
         : (
-          <>
+          <div className={css.selfRow}>
             <div className={css.selfSeat}>
               <SeatAvatar
                 avatarUrl={mine?.avatarUrl ?? null}
@@ -105,16 +109,20 @@ export function TableView({
                 {view.mingPaiBySeat?.[self] ? <span className={css.badge}>明牌</span> : null}
               </div>
             </div>
-            <div className={css.hand}>
-              <div className={css.handInner}>
-                {view.you.cards.map((card) => (
-                  <button type="button" key={card} onClick={() => { onToggle(card) }}>
-                    <CardFace card={card} selected={selected.includes(card)} laiZiRanks={laiZi} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
+            {phase === 'waiting' && !view.bottom
+              ? <CardBack count={holeCount(count)} compact />
+              : (
+                <div className={css.hand}>
+                  <div className={css.handInner}>
+                    {view.you.cards.map((card) => (
+                      <button type="button" key={card} onClick={() => { onToggle(card) }}>
+                        <CardFace card={card} selected={selected.includes(card)} laiZiRanks={laiZi} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+          </div>
         )}
       <div className={css.actions}>
         {phase === 'waiting' && !view.you.spectator

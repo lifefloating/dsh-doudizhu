@@ -134,7 +134,7 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
         onClick={() => { setOpen(!open) }}
       >
         <span className={css.settingsHeadText}>
-          <span className={css.settingsName}>dsh-doudizhu</span>
+          <span className={css.settingsName}>dsh-poker</span>
           <span className={css.settingsDesc}>本机房间默认：人数、癞子、邀请地址和欢迎积分。同一房间先到入座，后来观战。</span>
         </span>
         <svg
@@ -150,7 +150,7 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
       {open
         ? (
           <div className={css.settingsBody}>
-            <p className={css.settingsHint}>开房在侧栏「斗地主」，这里只改下次开房的默认值。点保存后生效，已经开着的房间不动。</p>
+            <p className={css.settingsHint}>开房在侧栏 New Session 下面的「斗地主」，这里只改下次开房的默认值。点保存后生效，已经开着的房间不动。</p>
             <label className={css.settingsField}>
               <span className={css.settingsLabel}>对外地址 publicBaseUrl</span>
               <input
@@ -169,7 +169,7 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
                 value={draft.welcomeAtoms}
                 onChange={(event) => { patch('welcomeAtoms', event.target.value) }}
               />
-              <p className={css.settingsFieldHint}>进房时账本里的起始积分，不是 DeepSeek 平台余额。默认 200000000（200M）。</p>
+              <p className={css.settingsFieldHint}>进房时账本里的起始积分，不是 DeepSeek 平台余额。默认 200M。</p>
             </label>
             <label className={css.settingsField}>
               <span className={css.settingsLabel}>默认人数</span>

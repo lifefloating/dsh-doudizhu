@@ -3,7 +3,7 @@ import { connectChannel, joinRoom, sendCommand } from '../client/host-api.ts'
 import { SettlementView } from '../client/SettlementView.tsx'
 import { emptyState, toggleCard } from '../client/store.ts'
 import { RoomCodeBar } from '../client/InviteDialog.tsx'
-import { ROLE_ICONS } from '../client/SeatAvatar.tsx'
+import { JoinForm } from '../client/JoinForm.tsx'
 import { TableView } from '../client/TableView.tsx'
 import type { CardId, PlayerView } from '../types.ts'
 import css from '../client/styles.module.css'
@@ -62,40 +62,16 @@ export function JoinApp() {
         <div className={css.lobby}>
           <div className={css.card}>
             <h2>加入斗地主</h2>
-            <div className={css.roleHero}>
-              <figure className={css.roleHeroItem}>
-                <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
-                <figcaption>地主</figcaption>
-              </figure>
-              <figure className={css.roleHeroItem}>
-                <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
-                <figcaption>农民</figcaption>
-              </figure>
-              <figure className={css.roleHeroItem}>
-                <img className={css.roleHeroImg} src={ROLE_ICONS.landlordB} alt="地主" />
-                <figcaption>地主</figcaption>
-              </figure>
-              <figure className={css.roleHeroItem}>
-                <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
-                <figcaption>农民</figcaption>
-              </figure>
-              <figure className={css.roleHeroItem}>
-                <img className={css.roleHeroImg} src={ROLE_ICONS.spectator} alt="观战" />
-                <figcaption>观战</figcaption>
-              </figure>
-            </div>
-            <p className={css.hint}>同一房间链接。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
-            <div className={css.codeRow}>
-              <label className={css.field}>
-                房号
-                <input className={`${css.input} ${css.codeInput}`} value={code} onChange={(e) => { setCode(e.target.value) }} />
-              </label>
-              <button type="button" className={css.ghost} onClick={() => { void navigator.clipboard.writeText(code) }}>复制房号</button>
-            </div>
-            <label className={css.field}>邀请<input className={css.input} value={invite} onChange={(e) => { setInvite(e.target.value) }} /></label>
-            <label className={css.field}>昵称<input className={css.input} value={name} maxLength={16} onChange={(e) => { setName(e.target.value) }} /></label>
-            <button type="button" className={css.primary} onClick={() => { void join() }}>加入</button>
-            {state.error ? <p className={css.error}>{state.error}</p> : null}
+            <JoinForm
+              code={code}
+              invite={invite}
+              name={name}
+              onCode={setCode}
+              onInvite={setInvite}
+              onName={setName}
+              onJoin={() => { void join() }}
+              error={state.error}
+            />
           </div>
         </div>
       </div>

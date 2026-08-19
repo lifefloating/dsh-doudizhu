@@ -3,6 +3,7 @@ export const DEFAULT_STAKE_M = 1
 export const DEFAULT_MAX_MULTIPLIER = 8
 export const DEFAULT_WELCOME_ATOMS = 200_000_000n
 export const ATOMS_PER_M = 1_000_000n
+export const ATOMS_PER_B = 1_000_000_000n
 
 export function stakeAtomsFromM(stakeM: number): bigint {
   return BigInt(stakeM) * ATOMS_PER_M
@@ -17,11 +18,19 @@ export function seatCapAtoms(stakeAtoms: bigint, maxMultiplier: number, seatCoun
   return farmers * perFarmerCapAtoms(stakeAtoms, maxMultiplier)
 }
 
+/** Display token atoms as AI-token units: M (million) or B (billion). Never dump raw zeros. */
 export function formatM(atoms: bigint): string {
   const sign = atoms < 0n ? '-' : ''
   const abs = atoms < 0n ? -atoms : atoms
-  const whole = abs / ATOMS_PER_M
-  const rem = abs % ATOMS_PER_M
-  if (rem === 0n) return `${sign}${whole.toString()}M`
-  return `${sign}${abs.toString()}`
+  if (abs >= ATOMS_PER_B) return `${sign}${formatScaled(abs, ATOMS_PER_B)}B`
+  return `${sign}${formatScaled(abs, ATOMS_PER_M)}M`
+}
+
+function formatScaled(abs: bigint, unit: bigint): string {
+  const whole = abs / unit
+  const rem = abs % unit
+  if (rem === 0n) return whole.toString()
+  const decimals = unit.toString().length - 1
+  const frac = rem.toString().padStart(decimals, '0').replace(/0+$/, '')
+  return `${whole.toString()}.${frac}`
 }

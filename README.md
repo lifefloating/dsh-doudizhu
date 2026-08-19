@@ -1,4 +1,4 @@
-# dsh-doudizhu
+# dsh-poker
 
 DeepSeek Harness 上的斗地主。你在自己电脑上开房，朋友点链接就能进来。3 人、4 人都行，经典和癞子都行。
 
@@ -7,7 +7,7 @@ DeepSeek Harness 上的斗地主。你在自己电脑上开房，朋友点链接
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-doudizhu
+dsh plugin --profile web add dsh-poker
 ```
 
 装完重启一下 `dsh web`。
@@ -20,7 +20,7 @@ dsh plugin --profile web add link:/绝对路径/dsh-doudizhu
 
 ## 怎么打
 
-侧栏点「斗地主」，填房间名、选人数和玩法，创建房间。人齐了自动开打，后来的人观战。定地主是叫地主 / 抢地主，每抢一次公共倍数 ×2，然后加倍、出牌。每手 120 秒，超时会帮你出最小单张或者过。
+侧栏 New Session 下面点「斗地主」。首页有「创建 / 加入」两个 tab：自己开房填房间名、选人数和玩法；进别人的房填 6 位房号就行。人齐了自动开打，后来的人观战。定地主是叫地主 / 抢地主，每抢一次公共倍数 ×2，然后加倍、出牌。每手 120 秒，超时会帮你出最小单张或者过。
 
 3 人一副牌，每人 17 张，3 张底牌。4 人两副牌，每人 25 张，8 张底牌。
 
@@ -34,7 +34,7 @@ dsh plugin --profile web add link:/绝对路径/dsh-doudizhu
 
 ## 设置
 
-Settings → Plugins → dsh-doudizhu
+Settings → Plugins → dsh-poker
 
 - **publicBaseUrl**：对外地址。空着就只能本机打
 - **欢迎积分**：进房起始分，默认 200M
@@ -53,8 +53,4 @@ pnpm build
 pnpm verify    # typecheck + build + test
 ```
 
-发版用 pnpm 11 自带的 `pnpm change`。改完写一条 `.changeset/*.md` 跟代码一起提交。合进 `main` 后 Actions 会 `pnpm version -r` 再 OIDC 发包，不需要 `NPM_TOKEN`，也不走 `changesets/action`。
-
-npm 包设置里要把 Trusted Publisher 配成 GitHub Actions，workflow 文件名填 `release.yml`。
-
-从 GitHub 装源码要先开 `allowBuilds.dsh-doudizhu: true`，安装时会跑 `prepare` 编出 `lib/`。
+从 GitHub 装源码要先开 `allowBuilds.dsh-poker: true`，安装时会跑构建编出 `lib/`。

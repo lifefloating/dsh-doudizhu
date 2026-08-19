@@ -74,4 +74,16 @@ describe('RoomManager', () => {
     expect(watcher.view.you.spectator).toBe(true)
     await manager.dispose()
   })
+
+  it('lets a loopback client sit with only the room code', async () => {
+    const manager = new RoomManager(null, {}, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    await expect(manager.join({ roomCode: host.roomCode, invite: '', displayName: '南', role: 'sit' }))
+      .rejects.toThrow(/auth|invite|not found/)
+    const guest = await manager.join({
+      roomCode: host.roomCode, invite: '', displayName: '南', role: 'sit', local: true,
+    })
+    expect(guest.seat).toBe(1)
+    await manager.dispose()
+  })
 })

@@ -1,7 +1,7 @@
 import type { UserConfig } from 'tsdown'
 
 const config: UserConfig = {
-  name: 'dsh-doudizhu',
+  name: 'dsh-poker',
   entry: {
     index: 'src/index.ts',
     invariant: 'src/invariant.ts',

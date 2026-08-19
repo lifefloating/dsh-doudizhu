@@ -7,7 +7,7 @@ const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
 const config: UserConfig = {
-  name: 'dsh-doudizhu/join',
+  name: 'dsh-poker/join',
   tsconfig: 'tsconfig.client.json',
   entry: { index: 'src/join/main.tsx' },
   outDir: 'lib/join',
@@ -48,10 +48,10 @@ const config: UserConfig = {
       }
       return [
         `const css = ${JSON.stringify(code.toString())};`,
-        `const tagId = ${JSON.stringify(`dsh-doudizhu-join/${basename(fileId)}`)};`,
+        `const tagId = ${JSON.stringify(`dsh-poker-join/${basename(fileId)}`)};`,
         'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
         '  const tag = document.createElement(\'style\');',
-        '  tag.dataset.plugin = \'dsh-doudizhu-join\';',
+        '  tag.dataset.plugin = \'dsh-poker-join\';',
         '  tag.dataset.pluginCss = tagId;',
         '  tag.textContent = css;',
         '  document.head.appendChild(tag);',
@@ -70,15 +70,6 @@ const config: UserConfig = {
     { from: 'src/client/assets/card-back-landlord.png', to: 'lib/join/card-back-landlord.png' },
     { from: 'src/client/assets/joker-red.png', to: 'lib/join/joker-red.png' },
     { from: 'src/client/assets/joker-black.png', to: 'lib/join/joker-black.png' },
-    { from: 'src/client/assets/face-2.png', to: 'lib/join/face-2.png' },
-    { from: 'src/client/assets/face-3.png', to: 'lib/join/face-3.png' },
-    { from: 'src/client/assets/face-4.png', to: 'lib/join/face-4.png' },
-    { from: 'src/client/assets/face-5.png', to: 'lib/join/face-5.png' },
-    { from: 'src/client/assets/face-6.png', to: 'lib/join/face-6.png' },
-    { from: 'src/client/assets/face-7.png', to: 'lib/join/face-7.png' },
-    { from: 'src/client/assets/face-8.png', to: 'lib/join/face-8.png' },
-    { from: 'src/client/assets/face-9.png', to: 'lib/join/face-9.png' },
-    { from: 'src/client/assets/face-10.png', to: 'lib/join/face-10.png' },
     { from: 'src/client/assets/face-j.png', to: 'lib/join/face-j.png' },
     { from: 'src/client/assets/face-q.png', to: 'lib/join/face-q.png' },
     { from: 'src/client/assets/face-k.png', to: 'lib/join/face-k.png' },
@@ -87,6 +78,7 @@ const config: UserConfig = {
     { from: 'src/client/assets/role-landlord-b.png', to: 'lib/join/role-landlord-b.png' },
     { from: 'src/client/assets/role-farmer.png', to: 'lib/join/role-farmer.png' },
     { from: 'src/client/assets/role-farmer-b.png', to: 'lib/join/role-farmer-b.png' },
+    { from: 'src/client/assets/role-farmer-c.png', to: 'lib/join/role-farmer-c.png' },
     { from: 'src/client/assets/role-spectator.png', to: 'lib/join/role-spectator.png' },
     { from: 'src/client/assets/join.css', to: 'lib/join/join.css' },
   ],

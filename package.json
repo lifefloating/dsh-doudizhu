@@ -1,8 +1,24 @@
 {
-  "name": "dsh-doudizhu",
+  "name": "dsh-poker",
   "version": "0.1.0",
   "description": "斗地主房间插件。三人/四人、经典/癞子，Host 权威房间 + 欢迎积分账本 + 好友独立加入页",
+  "author": "lifefloating",
   "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "doudizhu",
+    "poker"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lifefloating/dsh-doudizhu.git"
+  },
+  "homepage": "https://github.com/lifefloating/dsh-doudizhu#readme",
+  "bugs": {
+    "url": "https://github.com/lifefloating/dsh-doudizhu/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -35,29 +51,26 @@
     }
   },
   "files": [
-    "lib/**/*.js",
-    "lib/**/*.d.ts",
-    "lib/**/*.map",
-    "lib/join/**",
+    "lib",
     "cordis.patch.yml",
-    "src/client/assets/**"
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "prepare.mjs"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/lifefloating/dsh-doudizhu.git"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
-    "prepare": "tsc -p tsconfig.build.json --noEmit && tsdown --config tsdown.config.ts && tsdown --config tsdown.client.ts && tsdown --config tsdown.join.ts",
-    "build": "pnpm prepare",
+    "clean": "node scripts/clean.mjs",
+    "prepare": "node prepare.mjs",
+    "build": "pnpm run clean && node scripts/emit-dts.mjs && tsdown --config tsdown.config.ts && tsdown --config tsdown.client.ts && tsdown --config tsdown.join.ts",
+    "prepack": "pnpm run build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "verify": "pnpm typecheck && pnpm build && pnpm test",
-    "changeset": "pnpm change",
-    "ci:version": "pnpm version -r --no-git-checks",
-    "ci:publish": "pnpm publish --access public --no-git-checks --provenance"
+    "release:check": "pnpm run verify && node scripts/check-package.mjs && git diff --check"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

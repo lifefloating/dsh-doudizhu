@@ -3,9 +3,9 @@ import css from './styles.module.css'
 
 const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '♦' }
 const ASSET = '/doudizhu/assets'
-const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'] as const
+export const FACE_ART_RANKS = ['J', 'Q', 'K', 'A'] as const
 const FACE_ART: Record<string, string> = Object.fromEntries(
-  RANKS.map((rank) => [rank, `${ASSET}/face-${rank.toLowerCase()}.png`]),
+  FACE_ART_RANKS.map((rank) => [rank, `${ASSET}/face-${rank.toLowerCase()}.png`]),
 )
 
 function cardBase(card: CardId | string): string {
@@ -48,11 +48,14 @@ export function CardFace({
   const rank = raw.slice(1)
   const red = suit === 'H' || suit === 'D'
   const art = FACE_ART[rank]
+  const glyph = SUIT_GLYPH[suit] ?? suit
   return (
-    <div className={`${css.cardFace} ${red ? css.red : ''} ${selected ? css.selected : ''} ${wild ? css.wild : ''}`}>
+    <div className={`${css.cardFace} ${red ? css.red : ''} ${selected ? css.selected : ''} ${wild ? css.wild : ''} ${art ? '' : css.plainFace}`}>
       <span className={css.rank}>{rank}{wild ? '*' : ''}</span>
-      {art ? <img className={css.faceArt} src={art} alt="" /> : null}
-      <span className={css.suit}>{SUIT_GLYPH[suit] ?? suit}</span>
+      {art
+        ? <img className={css.faceArt} src={art} alt="" />
+        : <span className={css.suitCenter}>{glyph}</span>}
+      <span className={css.suit}>{glyph}</span>
     </div>
   )
 }
