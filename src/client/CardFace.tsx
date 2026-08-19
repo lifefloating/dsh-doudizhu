@@ -4,10 +4,10 @@ import css from './styles.module.css'
 const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '♦' }
 const ASSET = '/doudizhu/assets'
 const FACE_ART: Record<string, string> = {
-  J: `${ASSET}/face-j.jpg`,
-  Q: `${ASSET}/face-q.jpg`,
-  K: `${ASSET}/face-k.jpg`,
-  A: `${ASSET}/face-a.jpg`,
+  J: `${ASSET}/face-j.png`,
+  Q: `${ASSET}/face-q.png`,
+  K: `${ASSET}/face-k.png`,
+  A: `${ASSET}/face-a.png`,
 }
 
 function cardBase(card: CardId | string): string {
@@ -40,7 +40,7 @@ export function CardFace({
       <div className={`${css.cardFace} ${css.jokerFace} ${red ? css.red : ''} ${selected ? css.selected : ''}`}>
         <img
           className={css.jokerArt}
-          src={red ? `${ASSET}/joker-red.jpg` : `${ASSET}/joker-black.jpg`}
+          src={red ? `${ASSET}/joker-red.png` : `${ASSET}/joker-black.png`}
           alt=""
         />
       </div>
