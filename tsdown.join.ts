@@ -73,6 +73,10 @@ const config: UserConfig = {
     { from: 'src/client/assets/face-q.png', to: 'lib/join/face-q.png' },
     { from: 'src/client/assets/face-k.png', to: 'lib/join/face-k.png' },
     { from: 'src/client/assets/face-a.png', to: 'lib/join/face-a.png' },
+    { from: 'src/client/assets/role-landlord.png', to: 'lib/join/role-landlord.png' },
+    { from: 'src/client/assets/role-landlord-b.png', to: 'lib/join/role-landlord-b.png' },
+    { from: 'src/client/assets/role-farmer.png', to: 'lib/join/role-farmer.png' },
+    { from: 'src/client/assets/role-farmer-b.png', to: 'lib/join/role-farmer-b.png' },
     { from: 'src/client/assets/join.css', to: 'lib/join/join.css' },
   ],
 }

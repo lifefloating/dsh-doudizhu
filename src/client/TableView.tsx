@@ -4,6 +4,7 @@ import { formatM } from '../settle/math.ts'
 import { parseAtoms, type CardId, type PlayerView, type Seat, type SeatState } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
 import { CardFace } from './CardFace.tsx'
+import { SeatAvatar } from './SeatAvatar.tsx'
 import { SeatRow } from './SeatRow.tsx'
 import { selectionLegal } from './store.ts'
 import css from './styles.module.css'
@@ -79,10 +80,19 @@ export function TableView({
         ? <div className={css.hint}>观战中。只能看见已打出的牌与公开区。</div>
         : (
           <>
-            <div className={css.seatName}>
-              {mine?.displayName}
-              {mine?.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
-              {view.mingPaiBySeat?.[self] ? <span className={css.badge}>明牌</span> : null}
+            <div className={css.selfSeat}>
+              <SeatAvatar
+                avatarUrl={mine?.avatarUrl ?? null}
+                role={mine?.role ?? 'empty'}
+                seat={self}
+                occupied={Boolean(mine?.playerId)}
+              />
+              <div className={css.seatName}>
+                {mine?.displayName}
+                {mine?.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
+                {mine?.role === 'farmer' ? <span className={css.badge}>农民</span> : null}
+                {view.mingPaiBySeat?.[self] ? <span className={css.badge}>明牌</span> : null}
+              </div>
             </div>
             <div className={css.hand}>
               {view.you.cards.map((card) => (

@@ -177,6 +177,41 @@
 .seatCenter { align-items: center; }
 .seatName { font-weight: 600; font-size: 13px; }
 
+.selfSeat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.roleHero {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 12px 0 4px;
+}
+
+.roleHeroItem {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.roleHeroImg {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  object-fit: contain;
+  background: #f5ede0;
+  border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
+}
+
 .badge {
   display: inline-block;
   font-size: 11px;
@@ -191,13 +226,19 @@
 .ready { color: var(--dsw-alias-label-success, #2f8f62); font-size: 12px; }
 
 .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: #f5ede0;
+  border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
+}
+.avatarLandlord {
+  box-shadow: 0 0 0 2px #c62828;
 }
 @media (max-width: 720px) {
-  .avatar { width: 32px; height: 32px; }
+  .avatar { width: 40px; height: 40px; }
+  .roleHeroImg { width: 64px; height: 64px; }
 }
 
 .backs { display: flex; }

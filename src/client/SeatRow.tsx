@@ -15,10 +15,16 @@ export function SeatRow({
   const alignClass = align === 'right' ? css.seatRight : align === 'center' ? css.seatCenter : ''
   return (
     <div className={`${css.seat} ${alignClass}`}>
-      <SeatAvatar avatarUrl={seat.avatarUrl} />
+      <SeatAvatar
+        avatarUrl={seat.avatarUrl}
+        role={seat.role}
+        seat={seat.seat}
+        occupied={Boolean(seat.playerId)}
+      />
       <div className={css.seatName}>
         {seat.displayName ?? '空座'}
         {seat.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
+        {seat.role === 'farmer' ? <span className={css.badge}>农民</span> : null}
         {revealed && revealed.length > 0 ? <span className={css.badge}>明牌</span> : null}
       </div>
       {seat.ready && seat.role === 'empty' ? <div className={css.ready}>准备</div> : null}

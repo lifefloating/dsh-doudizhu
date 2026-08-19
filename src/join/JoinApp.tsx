@@ -3,6 +3,7 @@ import { connectChannel, joinRoom, sendCommand } from '../client/host-api.ts'
 import { SettlementView } from '../client/SettlementView.tsx'
 import { emptyState, toggleCard } from '../client/store.ts'
 import { RoomCodeBar } from '../client/InviteDialog.tsx'
+import { ROLE_ICONS } from '../client/SeatAvatar.tsx'
 import { TableView } from '../client/TableView.tsx'
 import type { CardId, PlayerView } from '../types.ts'
 import css from '../client/styles.module.css'
@@ -61,6 +62,24 @@ export function JoinApp() {
         <div className={css.lobby}>
           <div className={css.card}>
             <h2>加入斗地主</h2>
+            <div className={css.roleHero}>
+              <figure className={css.roleHeroItem}>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
+                <figcaption>地主</figcaption>
+              </figure>
+              <figure className={css.roleHeroItem}>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
+                <figcaption>农民</figcaption>
+              </figure>
+              <figure className={css.roleHeroItem}>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.landlordB} alt="地主" />
+                <figcaption>地主</figcaption>
+              </figure>
+              <figure className={css.roleHeroItem}>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
+                <figcaption>农民</figcaption>
+              </figure>
+            </div>
             <p className={css.hint}>同一房间链接。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
             <div className={css.codeRow}>
               <label className={css.field}>

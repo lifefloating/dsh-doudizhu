@@ -1,6 +1,7 @@
 import { formatM } from '../settle/math.ts'
 import type { PublicSettlement } from '../types.ts'
 import { parseAtoms } from '../types.ts'
+import { ROLE_ICONS } from './SeatAvatar.tsx'
 import css from './styles.module.css'
 
 export function SettlementView({
@@ -12,6 +13,16 @@ export function SettlementView({
   return (
     <div className={css.settlement}>
       <div className={css.card}>
+        <div className={css.roleHero}>
+          {settlement.winner === 'landlord'
+            ? <img className={`${css.roleHeroImg} ${css.avatarLandlord}`} src={ROLE_ICONS.landlord} alt="地主" />
+            : (
+              <>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
+                <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
+              </>
+            )}
+        </div>
         <h2>{settlement.winner === 'landlord' ? '地主胜' : '农民胜'}</h2>
         <p className={css.hint}>{settlement.formula}</p>
         <ul>
