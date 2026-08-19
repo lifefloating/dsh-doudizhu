@@ -6,13 +6,15 @@ import css from './styles.module.css'
 const MAX_MULTIPLIER_OPTIONS = [8, 16, 32, 64] as const
 
 export function LobbyView({
-  stakeM, maxMultiplier, seatCount, laiZi, onStake, onCap, onSeats, onLaiZi, onCreate, creating, error,
+  title, stakeM, maxMultiplier, seatCount, laiZi, onTitle, onStake, onCap, onSeats, onLaiZi, onCreate, creating, error,
   roomCode, sitUrl, watchUrl, shareable, welcomeAtoms,
 }: {
+  title: string
   stakeM: number
   maxMultiplier: number
   seatCount: SeatCount
   laiZi: boolean
+  onTitle: (value: string) => void
   onStake: (value: number) => void
   onCap: (value: number) => void
   onSeats: (value: SeatCount) => void
@@ -33,6 +35,16 @@ export function LobbyView({
       <div className={css.card}>
         <h2>创建房间</h2>
         <p className={css.hint}>好友局信房主这台机器上的账本。积分不是 DeepSeek 平台余额。</p>
+        <label className={css.field}>
+          房间名
+          <input
+            className={css.input}
+            value={title}
+            maxLength={24}
+            placeholder="好友局"
+            onChange={(event) => { onTitle(event.target.value) }}
+          />
+        </label>
         <div className={css.row}>
           <label className={css.field}>
             人数

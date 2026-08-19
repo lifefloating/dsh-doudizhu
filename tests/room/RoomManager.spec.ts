@@ -10,11 +10,14 @@ describe('RoomManager', () => {
 
   it('creates a 3-seat waiting room and sits the host', async () => {
     const manager = new RoomManager(null, {}, null)
-    const created = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '房主' })
+    const created = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '房主', title: '周五局' })
     expect(created.roomCode).toMatch(/^\d{6}$/)
     expect(created.shareable).toBe(false)
     expect(created.view.you.seat).toBe(0)
     expect(created.view.room.phase).toBe('waiting')
+    expect(created.view.room.title).toBe('周五局')
+    await manager.command(created.roomId, created.hostPlayerId, { type: 'rename', title: '通宵场' }, true)
+    expect(manager.view(created.roomId, created.hostPlayerId).room.title).toBe('通宵场')
     await manager.dispose()
   })
 

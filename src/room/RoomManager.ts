@@ -5,7 +5,7 @@ import {
 } from '../engine/play.ts'
 import { scoreHand } from '../engine/score.ts'
 import { rankOf } from '../engine/cards.ts'
-import { newPlayerId, sanitizeAvatarUrl, sanitizeDisplayName } from '../identity/player.ts'
+import { newPlayerId, sanitizeAvatarUrl, sanitizeDisplayName, sanitizeRoomTitle } from '../identity/player.ts'
 import { MAX_CHAT, MAX_SPECTATORS } from '../invariant.ts'
 import { createMemoryDomain, openDoudizhuDomain, type DomainLike } from '../persist/domain.ts'
 import { createCounters, type HealthCounters } from '../settle/audit.ts'
@@ -41,6 +41,7 @@ export interface CreateRoomRequest {
   seatCount?: SeatCount
   laiZi?: boolean
   hostDisplayName?: string
+  title?: string
 }
 
 export interface CreateRoomResult {
@@ -172,12 +173,14 @@ export class RoomManager {
     const watchToken = randomToken()
     const hostPlayerId = newPlayerId()
     const displayName = sanitizeDisplayName(req.hostDisplayName ?? '房主')
+    const title = sanitizeRoomTitle(req.title ?? '好友局')
     await this.ledger.ensurePlayer(hostPlayerId, displayName, null)
     const stakeAtoms = BigInt(req.stakeM) * 1_000_000n
     const now = nowIso()
     const room: Room = {
       roomId,
       roomCode,
+      title,
       hostPlayerId,
       phase: 'waiting',
       stakeAtoms,
@@ -344,6 +347,9 @@ export class RoomManager {
           break
         case 'double':
           this.double(live, playerId, command.action)
+          break
+        case 'rename':
+          this.rename(live, playerId, command.title, isHost)
           break
         case 'play':
           this.play(live, playerId, command.cards)
@@ -514,6 +520,12 @@ export class RoomManager {
       })),
     }
     live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+  }
+
+  private rename(live: LiveRoom, playerId: PlayerId, title: string, isHost: boolean): void {
+    if (!isHost && live.room.hostPlayerId !== playerId) throw fail('auth', 'host only')
+    live.room = { ...live.room, title: sanitizeRoomTitle(title, live.room.title) }
+    void this.persistRoom(live)
   }
 
   private bid(live: LiveRoom, playerId: PlayerId, score: 0 | 1 | 2 | 3): void {
@@ -838,6 +850,7 @@ export class RoomManager {
     await this.domain.tables.rooms.put(live.room.roomId, {
       roomId: live.room.roomId,
       roomCode: live.room.roomCode,
+      title: live.room.title,
       hostPlayerId: live.room.hostPlayerId,
       phase: live.room.phase,
       stakeAtoms: live.room.stakeAtoms.toString(),

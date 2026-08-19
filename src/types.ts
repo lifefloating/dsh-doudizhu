@@ -47,6 +47,7 @@ export interface SeatState {
 export interface Room {
   readonly roomId: RoomId
   readonly roomCode: string
+  readonly title: string
   readonly hostPlayerId: PlayerId
   readonly phase: RoomPhase
   readonly stakeAtoms: bigint
@@ -166,6 +167,7 @@ export type ClientCommand =
   | { type: 'ready'; ready: boolean }
   | { type: 'bid'; score: BidScore }
   | { type: 'double'; action: 'pass' | 'double' | 'reDouble' }
+  | { type: 'rename'; title: string }
   | { type: 'play'; cards: CardId[]; nonce: string }
   | { type: 'pass'; nonce: string }
   | { type: 'chat'; text: string }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { connectChannel, joinRoom, sendCommand } from '../client/host-api.ts'
 import { SettlementView } from '../client/SettlementView.tsx'
 import { emptyState, toggleCard } from '../client/store.ts'
+import { RoomCodeBar } from '../client/InviteDialog.tsx'
 import { TableView } from '../client/TableView.tsx'
 import type { CardId, PlayerView } from '../types.ts'
 import css from '../client/styles.module.css'
@@ -61,7 +62,13 @@ export function JoinApp() {
           <div className={css.card}>
             <h2>加入斗地主</h2>
             <p className={css.hint}>同一房间链接。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
-            <label className={css.field}>房号<input className={css.input} value={code} onChange={(e) => { setCode(e.target.value) }} /></label>
+            <div className={css.codeRow}>
+              <label className={css.field}>
+                房号
+                <input className={`${css.input} ${css.codeInput}`} value={code} onChange={(e) => { setCode(e.target.value) }} />
+              </label>
+              <button type="button" className={css.ghost} onClick={() => { void navigator.clipboard.writeText(code) }}>复制房号</button>
+            </div>
             <label className={css.field}>邀请<input className={css.input} value={invite} onChange={(e) => { setInvite(e.target.value) }} /></label>
             <label className={css.field}>昵称<input className={css.input} value={name} maxLength={16} onChange={(e) => { setName(e.target.value) }} /></label>
             <button type="button" className={css.primary} onClick={() => { void join() }}>加入</button>
@@ -75,6 +82,9 @@ export function JoinApp() {
   return (
     <div className={css.root}>
       {state.error ? <div className={css.banner}>{state.error}</div> : null}
+      <div className={css.banner}>
+        <RoomCodeBar title={state.view.room.title} roomCode={state.view.room.roomCode} />
+      </div>
       {state.settlement && state.view.room.phase === 'waiting'
         ? (
           <SettlementView

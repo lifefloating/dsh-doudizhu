@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_STAKE_M, DEFAULT_WELCOME_ATOMS } from '../settle/math.ts'
 import type { CardId, ClientCommand, PlayerView, SeatCount } from '../types.ts'
 import { connectChannel, createRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
+import { RoomCodeBar } from './InviteDialog.tsx'
 import { LobbyView } from './LobbyView.tsx'
 import { SettlementView } from './SettlementView.tsx'
 import { emptyState, toggleCard } from './store.ts'
@@ -13,6 +14,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   const [maxMultiplier, setMaxMultiplier] = useState(DEFAULT_MAX_MULTIPLIER)
   const [seatCount, setSeatCount] = useState<SeatCount>(3)
   const [laiZi, setLaiZi] = useState(false)
+  const [title, setTitle] = useState('好友局')
   const [state, setState] = useState(emptyState)
   const [creating, setCreating] = useState(false)
   const [roomId, setRoomId] = useState<string | null>(null)
@@ -42,7 +44,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
     setState((prev) => ({ ...prev, error: null }))
     try {
       const created: CreateRoomResponse = await createRoom({
-        stakeM, maxMultiplier, seatCount, laiZi, hostDisplayName: '房主',
+        stakeM, maxMultiplier, seatCount, laiZi, hostDisplayName: '房主', title,
       })
       setRoomId(created.roomId)
       setState((prev) => ({
@@ -91,10 +93,12 @@ export function HostApp({ onClose }: { onClose: () => void }) {
       {!state.view
         ? (
           <LobbyView
+            title={title}
             stakeM={stakeM}
             maxMultiplier={maxMultiplier}
             seatCount={seatCount}
             laiZi={laiZi}
+            onTitle={setTitle}
             onStake={setStakeM}
             onCap={setMaxMultiplier}
             onSeats={setSeatCount}
@@ -124,9 +128,14 @@ export function HostApp({ onClose }: { onClose: () => void }) {
               {state.roomCode
                 ? (
                   <div className={css.banner}>
-                    房间 {state.roomCode}
-                    {state.shareable ? ` · ${state.sitUrl}` : ' · 未配置 publicBaseUrl，仅本机可加入'}
-                    {' · 先到入座，后来观战'}
+                    <RoomCodeBar
+                      title={state.view.room.title}
+                      roomCode={state.roomCode}
+                      sitUrl={state.sitUrl}
+                      shareable={state.shareable}
+                      canRename
+                      onRename={(next) => { command({ type: 'rename', title: next }) }}
+                    />
                   </div>
                 )
                 : null}

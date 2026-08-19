@@ -35,7 +35,7 @@ export function TableView({
     <div className={css.table}>
       <div className={css.topbar}>
         <div>
-          {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · 叫分 {view.bid || '-'} · 阶段 {phaseLabel(phase)}
+          {view.room.title || '好友局'} · {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · 叫分 {view.bid || '-'} · 阶段 {phaseLabel(phase)}
         </div>
         <div className={css.muted}>余额 {view.yourAvailableAtoms} · 冻结 {view.yourEscrowAtoms}</div>
       </div>

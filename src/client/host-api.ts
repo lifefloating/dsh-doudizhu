@@ -46,6 +46,7 @@ export function createRoom(input: {
   seatCount?: 3 | 4
   laiZi?: boolean
   hostDisplayName?: string
+  title?: string
 }) {
   return request<CreateRoomResponse>('/api/rooms', { method: 'POST', body: JSON.stringify(input) })
 }

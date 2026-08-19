@@ -5,6 +5,7 @@ export const TokenAtomString = z.string().regex(/^-?\d+$/)
 export const RoomRecordSchema = z.object({
   roomId: z.string(),
   roomCode: z.string(),
+  title: z.string().default('好友局'),
   hostPlayerId: z.string(),
   phase: z.enum(['waiting', 'dealing', 'bidding', 'doubling', 'playing', 'settling', 'void', 'closed']),
   stakeAtoms: TokenAtomString,

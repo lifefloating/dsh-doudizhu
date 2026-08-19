@@ -292,6 +292,52 @@
   gap: 8px;
   margin-top: 12px;
 }
+
+.codeRow, .codeBar, .codeEdit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.codeBar {
+  width: 100%;
+}
+
+.codeValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform, #f3f3f3);
+  user-select: all;
+  cursor: pointer;
+}
+
+.codeInput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.titleBtn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.titleBtn:disabled {
+  cursor: default;
+}
+
 .qr { width: 132px; height: 132px; background: white; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, #e8e8e8); }
 
 .timer {

@@ -103,6 +103,7 @@ async function handleApi(
       seatCount?: 3 | 4
       laiZi?: boolean
       hostDisplayName?: string
+      title?: string
     }>(req)
     try {
       const created = await manager.createRoom({
@@ -111,6 +112,7 @@ async function handleApi(
         seatCount: body.seatCount === 4 ? 4 : 3,
         laiZi: body.laiZi === true,
         ...(body.hostDisplayName ? { hostDisplayName: body.hostDisplayName } : {}),
+        ...(body.title ? { title: body.title } : {}),
       }, cookies.ddz_host)
       json(res, 200, {
         roomId: created.roomId,
