@@ -1,0 +1,4 @@
+dsh-doudizhu@0.1.0:
+  dir: ""
+  intents:
+    - oidc-release
