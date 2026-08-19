@@ -143,8 +143,9 @@ export function HostApp({ onClose }: { onClose: () => void }) {
                 view={state.view}
                 selected={state.selected}
                 onToggle={(card: CardId) => { setState((prev) => ({ ...prev, selected: toggleCard(prev.selected, card) })) }}
-                onBid={(score) => { command({ type: 'bid', score }) }}
+                onBid={(action) => { command({ type: 'bid', action }) }}
                 onDouble={(action) => { command({ type: 'double', action }) }}
+                onMingPai={() => { command({ type: 'mingPai' }) }}
                 onPlay={() => { command({ type: 'play', cards: state.selected, nonce: crypto.randomUUID() }) }}
                 onPass={() => { command({ type: 'pass', nonce: crypto.randomUUID() }) }}
                 onReady={(ready) => { command({ type: 'ready', ready }) }}

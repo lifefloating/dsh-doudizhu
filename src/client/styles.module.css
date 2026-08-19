@@ -338,6 +338,18 @@
   cursor: default;
 }
 
+.miniHand {
+  display: flex;
+  max-width: 220px;
+  overflow: hidden;
+}
+.miniHand > * {
+  width: 36px;
+  height: 52px;
+  margin-left: -18px;
+  flex: none;
+}
+.miniHand > *:first-child { margin-left: 0; }
 .qr { width: 132px; height: 132px; background: white; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, #e8e8e8); }
 
 .timer {

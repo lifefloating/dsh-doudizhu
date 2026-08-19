@@ -1,6 +1,6 @@
 import {
-  asHandId, decksFor, nextSeat, type BidScore, type CardId,
-  type Hand, type HandId, type Play, type RoomId, type Seat, type SeatCount,
+  asHandId, decksFor, nextSeat, type BidAction, type BidScore, type CardId,
+  type DoubleAction, type Hand, type HandId, type Play, type RoomId, type Seat, type SeatCount,
 } from '../types.ts'
 import { sortCards } from './cards.ts'
 import { dealCards, giveBottom, pickLaiZiRanks, randomSeat } from './deal.ts'
@@ -16,9 +16,12 @@ export interface EngineState {
   firstLeadSeq: number | null
   successfulLandlordPlaysAfterLead: number
   farmerPlayed: boolean[]
-  bids: Array<BidScore | null>
+  bids: Array<BidAction | null>
   bidTurn: Seat
-  highestBid: BidScore
+  called: boolean
+  actedBid: boolean[]
+  refusedCall: boolean[]
+  robBackDone: boolean
   highestBidder: Seat | null
   passesInRow: number
   doubleDeadlineAt: number
@@ -34,8 +37,10 @@ export interface MutableHand {
   hands: CardId[][]
   bid: BidScore
   landlordSeat: Seat | null
-  farmerDoubledBySeat: Partial<Record<Seat, boolean>>
-  landlordReDouble: boolean
+  farmerDoubledBySeat: Partial<Record<Seat, number>>
+  landlordReDouble: number
+  mingPaiBySeat: Partial<Record<Seat, boolean>>
+  mingPaiMult: number
   bombCount: number
   rocketCount: number
   spring: 'none' | 'spring' | 'anti'
@@ -75,7 +80,9 @@ export function createHand(
     bid: 0,
     landlordSeat: null,
     farmerDoubledBySeat: {},
-    landlordReDouble: false,
+    landlordReDouble: 1,
+    mingPaiBySeat: {},
+    mingPaiMult: 1,
     bombCount: 0,
     rocketCount: 0,
     spring: 'none',
@@ -94,7 +101,10 @@ export function createHand(
     farmerPlayed: Array.from({ length: seatCount }, () => false),
     bids: Array.from({ length: seatCount }, () => null),
     bidTurn: start,
-    highestBid: 0,
+    called: false,
+    actedBid: Array.from({ length: seatCount }, () => false),
+    refusedCall: Array.from({ length: seatCount }, () => false),
+    robBackDone: false,
     highestBidder: null,
     passesInRow: 0,
     doubleDeadlineAt: 0,
@@ -103,36 +113,67 @@ export function createHand(
   }
 }
 
-export function applyBid(state: EngineState, seat: Seat, score: BidScore): PlayResult {
+export function applyBid(state: EngineState, seat: Seat, action: BidAction): PlayResult {
   if (state.phase !== 'bidding') return { ok: false, code: 'phase', reason: 'not bidding' }
   if (state.bidTurn !== seat) return { ok: false, code: 'not-your-turn', reason: 'not your bid' }
-  if (score !== 0 && score <= state.highestBid) {
-    return { ok: false, code: 'illegal', reason: 'bid must be higher' }
-  }
-  state.bids[seat] = score
-  if (score > state.highestBid) {
-    state.highestBid = score
+  const robBack = state.actedBid[seat] === true
+  if (robBack && action === 'call') return { ok: false, code: 'illegal', reason: 'already called' }
+  if (action === 'call') {
+    if (state.called) return { ok: false, code: 'illegal', reason: 'already called' }
+    state.called = true
     state.highestBidder = seat
+    state.hand.bid = 1
+    const othersPassed = state.refusedCall.filter(Boolean).length === state.seatCount - 1
+    if (othersPassed) {
+      state.bids[seat] = action
+      state.actedBid[seat] = true
+      lockLandlord(state, seat, 1)
+      return { ok: true, play: dummyPlay(seat), emptied: false }
+    }
+  } else if (action === 'rob') {
+    if (!state.called) return { ok: false, code: 'illegal', reason: 'nobody called yet' }
+    if (state.refusedCall[seat]) return { ok: false, code: 'illegal', reason: 'passed call cannot rob' }
+    state.highestBidder = seat
+    state.hand.bid = Math.max(1, state.hand.bid) * 2
+  } else if (!state.called) {
+    state.refusedCall[seat] = true
   }
-  if (score === 3) {
-    lockLandlord(state, seat, 3)
-    return { ok: true, play: dummyPlay(seat), emptied: false }
-  }
-  state.bidTurn = nextSeat(seat, state.seatCount)
-  if (state.bids.every((bid) => bid !== null)) {
-    if (state.highestBidder === null || state.highestBid === 0) {
+  state.bids[seat] = action
+  if (robBack) state.robBackDone = true
+  else state.actedBid[seat] = true
+  const next = nextBidder(state, seat)
+  if (next === null) {
+    if (!state.called || state.highestBidder === null || state.hand.bid === 0) {
       state.phase = 'redeal'
       return { ok: true, play: dummyPlay(seat), emptied: false }
     }
-    lockLandlord(state, state.highestBidder, state.highestBid)
+    lockLandlord(state, state.highestBidder, state.hand.bid)
+    return { ok: true, play: dummyPlay(seat), emptied: false }
   }
+  state.bidTurn = next
   return { ok: true, play: dummyPlay(seat), emptied: false }
+}
+
+export function applyMingPai(state: EngineState, seat: Seat): PlayResult {
+  if (state.hand.mingPaiBySeat[seat]) return { ok: false, code: 'illegal', reason: 'already ming pai' }
+  if (state.phase === 'bidding' && state.hand.landlordSeat === null) {
+    state.hand.mingPaiBySeat[seat] = true
+    state.hand.mingPaiMult = Math.max(state.hand.mingPaiMult, 3)
+    if (!state.called && state.actedBid.every((acted) => !acted)) state.bidTurn = seat
+    return { ok: true, play: dummyPlay(seat), emptied: false }
+  }
+  if (state.phase === 'doubling' || state.phase === 'playing') {
+    state.hand.mingPaiBySeat[seat] = true
+    state.hand.mingPaiMult = Math.max(state.hand.mingPaiMult, 2)
+    return { ok: true, play: dummyPlay(seat), emptied: false }
+  }
+  return { ok: false, code: 'phase', reason: 'cannot ming pai now' }
 }
 
 export function applyDouble(
   state: EngineState,
   seat: Seat,
-  action: 'pass' | 'double' | 'reDouble',
+  action: DoubleAction,
   now = Date.now(),
 ): PlayResult {
   if (state.phase !== 'doubling') return { ok: false, code: 'phase', reason: 'not doubling' }
@@ -142,19 +183,17 @@ export function applyDouble(
   }
   const landlord = state.hand.landlordSeat
   if (landlord === null) return { ok: false, code: 'phase', reason: 'no landlord' }
+  const factor = action === 'reDouble' ? 4 : action === 'double' ? 2 : 1
   if (seat === landlord) {
-    if (action === 'double') return { ok: false, code: 'illegal', reason: 'landlord cannot double' }
-    if (!farmersFinished(state)) return { ok: false, code: 'illegal', reason: 'wait for farmers' }
     if (state.landlordDoubleDone) return { ok: false, code: 'illegal', reason: 'already answered' }
-    state.hand.landlordReDouble = action === 'reDouble'
+    state.hand.landlordReDouble = factor
     state.landlordDoubleDone = true
-    finishDoubling(state)
+    if (farmersFinished(state)) finishDoubling(state)
     return { ok: true, play: dummyPlay(seat), emptied: false }
   }
-  if (action === 'reDouble') return { ok: false, code: 'illegal', reason: 'farmers cannot reDouble' }
   if (state.farmerDoubleDone[seat]) return { ok: false, code: 'illegal', reason: 'already answered' }
   state.farmerDoubleDone[seat] = true
-  if (action === 'double') state.hand.farmerDoubledBySeat[seat] = true
+  if (factor > 1) state.hand.farmerDoubledBySeat[seat] = factor
   if (farmersFinished(state) && state.landlordDoubleDone) finishDoubling(state)
   return { ok: true, play: dummyPlay(seat), emptied: false }
 }
@@ -247,8 +286,33 @@ export function snapshotHand(state: EngineState): Hand {
     bottom: [...state.hand.bottom],
     table: [...state.hand.table],
     farmerDoubledBySeat: { ...state.hand.farmerDoubledBySeat },
+    mingPaiBySeat: { ...state.hand.mingPaiBySeat },
     laiZiRanks: [...state.hand.laiZiRanks],
   }
+}
+
+function nextBidder(state: EngineState, from: Seat): Seat | null {
+  let seat = nextSeat(from, state.seatCount)
+  for (let i = 0; i < state.seatCount; i += 1) {
+    if (!state.actedBid[seat]) return seat
+    seat = nextSeat(seat, state.seatCount)
+  }
+  const caller = firstCaller(state)
+  if (
+    state.called
+    && !state.robBackDone
+    && caller !== null
+    && state.highestBidder !== caller
+    && !state.refusedCall[caller]
+  ) {
+    return caller
+  }
+  return null
+}
+
+function firstCaller(state: EngineState): Seat | null {
+  const index = state.bids.findIndex((bid) => bid === 'call')
+  return index >= 0 ? index as Seat : null
 }
 
 function lockLandlord(state: EngineState, seat: Seat, bid: BidScore): void {

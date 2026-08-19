@@ -1,6 +1,6 @@
 import { addHours, cookieValue, inviteHash, nowIso, randomId, randomRoomCode, randomToken, sha256Hex } from '../crypto.ts'
 import {
-  applyBid, applyDouble, applyPass, applyPlay, autoTimeout, createHand, expireDoubling,
+  applyBid, applyDouble, applyMingPai, applyPass, applyPlay, autoTimeout, createHand, expireDoubling,
   legalFor, snapshotHand, type EngineState,
 } from '../engine/play.ts'
 import { scoreHand } from '../engine/score.ts'
@@ -14,8 +14,9 @@ import { Ledger } from '../settle/ledger.ts'
 import { seatCapAtoms } from '../settle/math.ts'
 import {
   asRoomId, asTokenAtomString, dealtHandSize, decksFor, landlordHandSize, nextSeat, parseAtoms, prevSeat,
-  type CardId, type ClientCommand, type PlayerId, type PlayerView, type PublicSettlement,
-  type RejectCode, type Room, type RoomId, type Seat, type SeatCount, type SeatState, type ServerEvent,
+  type BidAction, type CardId, type ClientCommand, type DoubleAction, type PlayerId, type PlayerView,
+  type PublicSettlement, type RejectCode, type Room, type RoomId, type Seat, type SeatCount, type SeatState,
+  type ServerEvent,
 } from '../types.ts'
 import { assertCreateEconomy, resolveConfig, validatePublicBaseUrl, type PluginConfig, type ResolvedConfig } from '../config.ts'
 
@@ -343,10 +344,13 @@ export class RoomManager {
           await this.setReady(live, playerId, command.ready)
           break
         case 'bid':
-          this.bid(live, playerId, command.score)
+          this.bid(live, playerId, command.action)
           break
         case 'double':
           this.double(live, playerId, command.action)
+          break
+        case 'mingPai':
+          this.mingPai(live, playerId)
           break
         case 'rename':
           this.rename(live, playerId, command.title, isHost)
@@ -522,16 +526,10 @@ export class RoomManager {
     live.deadlineAt = Date.now() + this.config.turnTimeoutMs
   }
 
-  private rename(live: LiveRoom, playerId: PlayerId, title: string, isHost: boolean): void {
-    if (!isHost && live.room.hostPlayerId !== playerId) throw fail('auth', 'host only')
-    live.room = { ...live.room, title: sanitizeRoomTitle(title, live.room.title) }
-    void this.persistRoom(live)
-  }
-
-  private bid(live: LiveRoom, playerId: PlayerId, score: 0 | 1 | 2 | 3): void {
+  private bid(live: LiveRoom, playerId: PlayerId, action: BidAction): void {
     const engine = this.requireEngine(live, 'bidding')
     const seat = this.requireSeat(live, playerId)
-    const result = applyBid(engine, seat, score)
+    const result = applyBid(engine, seat, action)
     if (!result.ok) throw fail(result.code, result.reason)
     if (engine.phase === 'redeal') {
       const dealer = engine.hand.dealerSeat
@@ -554,7 +552,20 @@ export class RoomManager {
     }
   }
 
-  private double(live: LiveRoom, playerId: PlayerId, action: 'pass' | 'double' | 'reDouble'): void {
+  private mingPai(live: LiveRoom, playerId: PlayerId): void {
+    if (!live.engine) throw fail('phase', 'no hand')
+    const seat = this.requireSeat(live, playerId)
+    const result = applyMingPai(live.engine, seat)
+    if (!result.ok) throw fail(result.code, result.reason)
+  }
+
+  private rename(live: LiveRoom, playerId: PlayerId, title: string, isHost: boolean): void {
+    if (!isHost && live.room.hostPlayerId !== playerId) throw fail('auth', 'host only')
+    live.room = { ...live.room, title: sanitizeRoomTitle(title, live.room.title) }
+    void this.persistRoom(live)
+  }
+
+  private double(live: LiveRoom, playerId: PlayerId, action: DoubleAction): void {
     const engine = this.requireEngine(live, 'doubling')
     const seat = this.requireSeat(live, playerId)
     const result = applyDouble(engine, seat, action)
@@ -809,6 +820,11 @@ export class RoomManager {
       bottom: bottomRevealed && engine ? [...engine.hand.bottom] : null,
       laiZiRanks: engine?.hand.laiZiRanks ?? [],
       bid: engine?.hand.bid ?? 0,
+      auction: engine && engine.phase === 'bidding'
+        ? { kind: engine.called ? 'rob' : 'call', multiplier: Math.max(1, engine.hand.bid) }
+        : null,
+      revealedBySeat: this.revealedHands(live),
+      mingPaiBySeat: engine ? { ...engine.hand.mingPaiBySeat } : {},
       turnSeat: engine?.hand.turnSeat ?? null,
       leadSeat: engine?.hand.leadSeat ?? null,
       deadlineAt: live.deadlineAt ? new Date(live.deadlineAt).toISOString() : null,
@@ -818,6 +834,18 @@ export class RoomManager {
       remainingRanks,
       chat: live.chat.slice(-20),
     }
+  }
+
+  private revealedHands(live: LiveRoom): Partial<Record<Seat, CardId[]>> {
+    const engine = live.engine
+    if (!engine) return {}
+    const out: Partial<Record<Seat, CardId[]>> = {}
+    for (const [raw, shown] of Object.entries(engine.hand.mingPaiBySeat)) {
+      if (!shown) continue
+      const seat = Number(raw) as Seat
+      out[seat] = [...(engine.hand.hands[seat] ?? [])]
+    }
+    return out
   }
 
   private remainingRanks(live: LiveRoom): Record<string, number> | null {

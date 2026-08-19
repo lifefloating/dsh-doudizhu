@@ -19,7 +19,10 @@ export type HandType =
   | 'seq' | 'seqPair' | 'plane' | 'planeSolo' | 'planePair'
   | 'fourDualSolo' | 'fourDualPair' | 'bomb' | 'rocket' | 'pass'
 
-export type BidScore = 0 | 1 | 2 | 3
+export type BidScore = number
+export type BidAction = 'pass' | 'call' | 'rob'
+export type DoubleAction = 'pass' | 'double' | 'reDouble'
+export type AuctionKind = 'call' | 'rob'
 
 export type RejectCode =
   | 'illegal' | 'not-your-turn' | 'phase' | 'auth' | 'duplicate-nonce'
@@ -83,8 +86,10 @@ export interface Hand {
   readonly hands: readonly CardId[][]
   readonly bid: BidScore
   readonly landlordSeat: Seat | null
-  readonly farmerDoubledBySeat: Partial<Record<Seat, boolean>>
-  readonly landlordReDouble: boolean
+  readonly farmerDoubledBySeat: Partial<Record<Seat, number>>
+  readonly landlordReDouble: number
+  readonly mingPaiBySeat: Partial<Record<Seat, boolean>>
+  readonly mingPaiMult: number
   readonly bombCount: number
   readonly rocketCount: number
   readonly spring: 'none' | 'spring' | 'anti'
@@ -112,6 +117,9 @@ export interface PlayerView {
   readonly bottom: readonly CardId[] | null
   readonly laiZiRanks: readonly string[]
   readonly bid: BidScore
+  readonly auction: { readonly kind: AuctionKind; readonly multiplier: number } | null
+  readonly revealedBySeat: Partial<Record<Seat, readonly CardId[]>>
+  readonly mingPaiBySeat: Partial<Record<Seat, boolean>>
   readonly turnSeat: Seat | null
   readonly leadSeat: Seat | null
   readonly deadlineAt: string | null
@@ -165,8 +173,9 @@ export type ClientCommand =
   | { type: 'sit'; seat: Seat; displayName: string }
   | { type: 'stand' }
   | { type: 'ready'; ready: boolean }
-  | { type: 'bid'; score: BidScore }
-  | { type: 'double'; action: 'pass' | 'double' | 'reDouble' }
+  | { type: 'bid'; action: BidAction; score?: BidScore }
+  | { type: 'double'; action: DoubleAction }
+  | { type: 'mingPai' }
   | { type: 'rename'; title: string }
   | { type: 'play'; cards: CardId[]; nonce: string }
   | { type: 'pass'; nonce: string }

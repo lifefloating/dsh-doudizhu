@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { holeCount } from '../types.ts'
+import { holeCount, type BidAction, type DoubleAction } from '../types.ts'
 import { formatM } from '../settle/math.ts'
 import { parseAtoms, type CardId, type PlayerView, type Seat, type SeatState } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
@@ -9,13 +9,14 @@ import { selectionLegal } from './store.ts'
 import css from './styles.module.css'
 
 export function TableView({
-  view, selected, onToggle, onBid, onDouble, onPlay, onPass, onChat,
+  view, selected, onToggle, onBid, onDouble, onMingPai, onPlay, onPass, onChat,
 }: {
   view: PlayerView
   selected: CardId[]
   onToggle: (card: CardId) => void
-  onBid: (score: 0 | 1 | 2 | 3) => void
-  onDouble: (action: 'pass' | 'double' | 'reDouble') => void
+  onBid: (action: BidAction) => void
+  onDouble: (action: DoubleAction) => void
+  onMingPai?: () => void
   onPlay: () => void
   onPass: () => void
   onReady?: (ready: boolean) => void
@@ -35,7 +36,7 @@ export function TableView({
     <div className={css.table}>
       <div className={css.topbar}>
         <div>
-          {view.room.title || '好友局'} · {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · 叫分 {view.bid || '-'} · 阶段 {phaseLabel(phase)}
+          {view.room.title || '好友局'} · {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · {view.bid ? `${view.bid}倍` : '未叫'} · 阶段 {phaseLabel(phase)}
         </div>
         <div className={css.muted}>余额 {view.yourAvailableAtoms} · 冻结 {view.yourEscrowAtoms}</div>
       </div>
@@ -57,6 +58,8 @@ export function TableView({
             key={seat.seat}
             seat={seat}
             align={index === opponents.length - 1 ? 'right' : index === 0 ? 'left' : 'center'}
+            {...(view.revealedBySeat?.[seat.seat] ? { revealed: view.revealedBySeat[seat.seat] } : {})}
+            laiZiRanks={laiZi}
           />
         ))}
       </div>
@@ -79,6 +82,7 @@ export function TableView({
             <div className={css.seatName}>
               {mine?.displayName}
               {mine?.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
+              {view.mingPaiBySeat?.[self] ? <span className={css.badge}>明牌</span> : null}
             </div>
             <div className={css.hand}>
               {view.you.cards.map((card) => (
@@ -94,19 +98,33 @@ export function TableView({
           ? <p className={css.hint}>等满 {count} 人自动开打。</p>
           : null}
         {phase === 'bidding' && isTurn(view)
-          ? [0, 1, 2, 3].map((score) => (
-            <button key={score} type="button" className={css.ghost} onClick={() => { onBid(score as 0 | 1 | 2 | 3) }}>
-              {score === 0 ? '不叫' : `${score}分`}
-            </button>
-          ))
+          ? (
+            <>
+              {view.auction?.kind === 'rob'
+                ? (
+                  <>
+                    <button type="button" className={css.ghost} onClick={() => { onBid('pass') }}>不抢</button>
+                    <button type="button" className={css.primary} onClick={() => { onBid('rob') }}>抢地主</button>
+                  </>
+                )
+                : (
+                  <>
+                    <button type="button" className={css.ghost} onClick={() => { onBid('pass') }}>不叫</button>
+                    <button type="button" className={css.primary} onClick={() => { onBid('call') }}>叫地主</button>
+                  </>
+                )}
+            </>
+          )
+          : null}
+        {canMingPai(view) && onMingPai
+          ? <button type="button" className={css.ghost} onClick={onMingPai}>明牌</button>
           : null}
         {phase === 'doubling' && !view.you.spectator
           ? (
             <>
               <button type="button" className={css.ghost} onClick={() => { onDouble('pass') }}>不加倍</button>
-              {mine?.role === 'farmer'
-                ? <button type="button" className={css.primary} onClick={() => { onDouble('double') }}>加倍</button>
-                : <button type="button" className={css.primary} onClick={() => { onDouble('reDouble') }}>超级加倍</button>}
+              <button type="button" className={css.primary} onClick={() => { onDouble('double') }}>加倍 ×2</button>
+              <button type="button" className={css.primary} onClick={() => { onDouble('reDouble') }}>超级加倍 ×4</button>
             </>
           )
           : null}
@@ -177,9 +195,15 @@ function useDeadline(deadlineAt: string | null): number | null {
   return Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000))
 }
 
+function canMingPai(view: PlayerView): boolean {
+  if (view.you.spectator || view.you.seat === null) return false
+  if (view.mingPaiBySeat?.[view.you.seat]) return false
+  return view.room.phase === 'bidding' || view.room.phase === 'doubling' || view.room.phase === 'playing'
+}
+
 function phaseLabel(phase: PlayerView['room']['phase']): string {
   if (phase === 'waiting') return '等人'
-  if (phase === 'bidding') return '叫分'
+  if (phase === 'bidding') return '叫抢'
   if (phase === 'doubling') return '加倍'
   if (phase === 'playing') return '出牌'
   if (phase === 'settling') return '结算'
