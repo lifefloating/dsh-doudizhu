@@ -77,7 +77,18 @@ export function TableView({
           : <CardBack count={holeCount(count)} />}
       </div>
       {view.you.spectator
-        ? <div className={css.hint}>观战中。只能看见已打出的牌与公开区。</div>
+        ? (
+          <>
+            <div className={css.selfSeat}>
+              <SeatAvatar spectator />
+              <div className={css.seatName}>
+                观战
+                <span className={css.badge}>观战</span>
+              </div>
+            </div>
+            <div className={css.hint}>观战中。只能看见已打出的牌与公开区。</div>
+          </>
+        )
         : (
           <>
             <div className={css.selfSeat}>
@@ -95,11 +106,13 @@ export function TableView({
               </div>
             </div>
             <div className={css.hand}>
-              {view.you.cards.map((card) => (
-                <button type="button" key={card} onClick={() => { onToggle(card) }}>
-                  <CardFace card={card} selected={selected.includes(card)} laiZiRanks={laiZi} />
-                </button>
-              ))}
+              <div className={css.handInner}>
+                {view.you.cards.map((card) => (
+                  <button type="button" key={card} onClick={() => { onToggle(card) }}>
+                    <CardFace card={card} selected={selected.includes(card)} laiZiRanks={laiZi} />
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}

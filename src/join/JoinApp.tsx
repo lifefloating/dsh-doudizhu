@@ -79,6 +79,10 @@ export function JoinApp() {
                 <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
                 <figcaption>农民</figcaption>
               </figure>
+              <figure className={css.roleHeroItem}>
+                <img className={css.roleHeroImg} src={ROLE_ICONS.spectator} alt="观战" />
+                <figcaption>观战</figcaption>
+              </figure>
             </div>
             <p className={css.hint}>同一房间链接。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
             <div className={css.codeRow}>

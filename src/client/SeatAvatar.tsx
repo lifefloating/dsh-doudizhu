@@ -8,6 +8,7 @@ export const ROLE_ICONS = {
   landlordB: `${ASSET}/role-landlord-b.png`,
   farmer: `${ASSET}/role-farmer.png`,
   farmerB: `${ASSET}/role-farmer-b.png`,
+  spectator: `${ASSET}/role-spectator.png`,
 } as const
 
 export function roleIconSrc(role: SeatState['role'], seat = 0): string {
@@ -20,19 +21,31 @@ export function SeatAvatar({
   role = 'empty',
   seat = 0,
   occupied = false,
+  spectator = false,
 }: {
   avatarUrl?: string | null
   role?: SeatState['role']
   seat?: number
   occupied?: boolean
+  spectator?: boolean
 }) {
+  if (spectator) {
+    return (
+      <img
+        className={css.avatar}
+        src={ROLE_ICONS.spectator}
+        alt="观战"
+        onError={(event) => { event.currentTarget.remove() }}
+      />
+    )
+  }
   const sitting = occupied || role === 'landlord' || role === 'farmer'
   const src = sitting ? roleIconSrc(role === 'empty' ? 'farmer' : role, seat) : avatarUrl
   if (!src) return null
   const landlord = role === 'landlord'
   return (
     <img
-      className={`${css.avatar} ${landlord ? css.avatarLandlord : ''}`}
+      className={css.avatar}
       src={src}
       alt={landlord ? '地主' : sitting ? '农民' : ''}
       onError={(event) => { event.currentTarget.remove() }}

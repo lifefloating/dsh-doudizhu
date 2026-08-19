@@ -3,12 +3,10 @@ import css from './styles.module.css'
 
 const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '♦' }
 const ASSET = '/doudizhu/assets'
-const FACE_ART: Record<string, string> = {
-  J: `${ASSET}/face-j.png`,
-  Q: `${ASSET}/face-q.png`,
-  K: `${ASSET}/face-k.png`,
-  A: `${ASSET}/face-a.png`,
-}
+const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'] as const
+const FACE_ART: Record<string, string> = Object.fromEntries(
+  RANKS.map((rank) => [rank, `${ASSET}/face-${rank.toLowerCase()}.png`]),
+)
 
 function cardBase(card: CardId | string): string {
   return String(card).split('~')[0] ?? String(card)

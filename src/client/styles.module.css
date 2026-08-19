@@ -4,6 +4,8 @@
   z-index: 20;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
   background: var(--dsw-alias-bg-base, #fff);
   color: var(--dsw-alias-label-primary, #1a1a1a);
   font-family: inherit;
@@ -48,7 +50,7 @@
   border-color: var(--dsw-alias-label-dimmed, #c8c8c8);
 }
 
-.lobby, .table, .settlement {
+.lobby, .settlement {
   flex: 1;
   overflow: auto;
   padding: 24px 20px;
@@ -152,36 +154,65 @@
 .error { color: var(--dsw-alias-label-error, #d64545); margin: 8px 0 0; font-size: 13px; }
 
 .table {
-  display: grid;
-  grid-template-rows: auto 1fr auto auto auto;
-  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .opponents {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex: none;
+  min-width: 0;
+  width: 100%;
 }
 
 .opponentsThree {
-  grid-template-columns: 1fr 1fr 1fr;
+  justify-content: space-between;
 }
 
 .seat {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   align-items: flex-start;
+  min-width: 0;
 }
 .seatRight { align-items: flex-end; }
 .seatCenter { align-items: center; }
-.seatName { font-weight: 600; font-size: 13px; }
+.seatHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+.seatRight .seatHead { flex-direction: row-reverse; }
+.seatMeta { min-width: 0; overflow: hidden; }
+.seatName {
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
 
 .selfSeat {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  flex: none;
 }
 
 .roleHero {
@@ -204,112 +235,236 @@
 }
 
 .roleHeroImg {
-  width: 80px;
-  height: 80px;
-  border-radius: 18px;
+  width: 128px;
+  height: 128px;
   object-fit: contain;
-  background: #f5ede0;
-  border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
+  background: transparent;
 }
 
 .badge {
   display: inline-block;
-  font-size: 11px;
-  padding: 1px 8px;
+  font-size: 13px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--dsw-alias-bg-module-platform, #f3f3f3);
   color: var(--dsw-alias-label-secondary, #5c5c5c);
-  margin-left: 6px;
-  font-weight: 500;
+  font-weight: 600;
+  flex: none;
 }
 
 .ready { color: var(--dsw-alias-label-success, #2f8f62); font-size: 12px; }
 
 .avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
-  background: #f5ede0;
-  border: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
-}
-.avatarLandlord {
-  box-shadow: 0 0 0 2px #c62828;
-}
-@media (max-width: 720px) {
-  .avatar { width: 40px; height: 40px; }
-  .roleHeroImg { width: 64px; height: 64px; }
+  background: transparent;
 }
 
-.backs { display: flex; }
-.backs > * { margin-left: -18px; }
+.remain {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+.remainCompact {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 0;
+}
+.seatRight .remainCompact {
+  align-items: flex-end;
+}
+
+.backs { display: flex; align-items: flex-end; isolation: isolate; min-width: 0; }
+.backs > * { margin-left: -40px; }
 .backs > *:first-child { margin-left: 0; }
+.backsCompact {
+  padding: 0;
+  width: 108px;
+  min-width: 0;
+  max-width: 100%;
+}
+.backsCompact > * {
+  margin-left: -28px;
+}
+.backsCompact > *:first-child { margin-left: 0; }
+.backsCompact .cardBack {
+  width: 44px;
+  height: 62px;
+  min-width: 44px;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.08);
+}
 
-.centerPlay { min-height: 110px; display: flex; justify-content: center; align-items: center; gap: 8px; }
-.bottom { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.cardsLeft {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  min-width: 1.25em;
+}
+
+.centerPlay {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.bottom {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: none;
+}
+.bottom .cardFace,
+.bottom .cardBack {
+  width: 52px;
+  height: 73px;
+}
+.bottom .remain { gap: 4px; }
 
 .hand {
   display: flex;
   justify-content: center;
-  padding: 8px 0 4px;
+  min-width: 0;
+  width: 100%;
+  padding: 22px 8px 6px;
+  overflow-x: auto;
+  flex: none;
 }
-.hand button {
+.handInner {
+  display: flex;
+  align-items: flex-end;
+  width: max-content;
+  margin: 0 auto;
+}
+.handInner button {
   background: none;
   border: 0;
   padding: 0;
-  margin-left: -28px;
+  margin-left: -36px;
   cursor: pointer;
+  position: relative;
+  z-index: 0;
+  flex: none;
 }
-.hand button:first-child { margin-left: 0; }
-.selected { transform: translateY(-12px); }
+.handInner button:first-child { margin-left: 0; }
+.handInner button:hover { z-index: 2; }
+.handInner button:has(.selected) { z-index: 3; }
+.selected { transform: translateY(-18px); }
 
-.actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: none;
+}
 
 .cardFace, .cardBack {
-  width: 64px;
-  height: 90px;
-  border-radius: 8px;
+  width: 88px;
+  height: 124px;
+  flex: none;
+  border-radius: 10px;
   border: 1px solid var(--dsw-alias-border-l2, #e0ddd6);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 6px 7px;
-  background: #fffdf8;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  background: #fff;
   color: #1a1a1a;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .cardBack {
-  background: #f6f4ef;
+  background: #fff;
   color: #1a1a1a;
   align-items: center;
   justify-content: center;
   padding: 0;
+}
+.cardBackLandlord {
+  box-shadow: 0 0 0 2px #c62828;
+}
+.backsCompact .cardBackLandlord {
+  box-shadow: 0 0 0 2px #c62828, 1px 1px 0 rgba(0, 0, 0, 0.08);
 }
 .red { color: #c62828; }
 .wild {
   box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary, #4d6bfe);
 }
-.rank { font-size: 16px; font-weight: 700; line-height: 1; }
-.suit { font-size: 18px; align-self: flex-end; }
+.rank {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  z-index: 1;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 3px #fff, 0 0 6px #fff;
+}
+.suit {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  z-index: 1;
+  font-size: 16px;
+  line-height: 1;
+  text-shadow: 0 0 3px #fff, 0 0 6px #fff;
+}
 .jokerFace {
-  padding: 4px;
+  padding: 0;
   justify-content: center;
   align-items: center;
 }
-.jokerArt, .faceArt {
+.jokerArt, .faceArt, .cardBackArt {
   pointer-events: none;
   object-fit: contain;
   background: transparent;
+  width: 100%;
+  height: 100%;
 }
-.jokerArt {
-  width: 92%;
-  height: 92%;
-}
-.faceArt {
-  width: 56px;
-  height: 48px;
-  align-self: center;
-  margin: -4px 0;
+
+@media (max-width: 720px) {
+  .table { padding: 8px 10px 6px; }
+  .avatar { width: 56px; height: 56px; }
+  .roleHeroImg { width: 96px; height: 96px; }
+
+  .seatHead,
+  .seatRight .seatHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .seatRight .seatHead { align-items: flex-end; }
+  .cardFace, .cardBack {
+    width: 72px;
+    height: 102px;
+  }
+  .hand { padding-top: 20px; }
+  .handInner button { margin-left: -32px; }
+  .backs > * { margin-left: -32px; }
+  .backsCompact { padding: 0; width: 78px; }
+  .backsCompact .cardBack {
+    width: 30px;
+    height: 42px;
+    min-width: 30px;
+  }
+  .backsCompact > * { margin-left: -18px; }
+  .cardsLeft { font-size: 16px; }
+  .bottom .cardFace,
+  .bottom .cardBack {
+    width: 44px;
+    height: 62px;
+  }
 }
 
 .sidebarBtn {
@@ -381,13 +536,13 @@
 
 .miniHand {
   display: flex;
-  max-width: 220px;
+  max-width: 320px;
   overflow: hidden;
 }
 .miniHand > * {
-  width: 36px;
-  height: 52px;
-  margin-left: -18px;
+  width: 52px;
+  height: 73px;
+  margin-left: -26px;
   flex: none;
 }
 .miniHand > *:first-child { margin-left: 0; }
@@ -429,10 +584,11 @@
 }
 
 .chat {
-  max-height: 80px;
+  max-height: 56px;
   overflow: auto;
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  flex: none;
 }
 
 /* Settings card: same chrome as DSH PluginCard */

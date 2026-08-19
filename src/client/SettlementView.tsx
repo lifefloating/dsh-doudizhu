@@ -15,7 +15,7 @@ export function SettlementView({
       <div className={css.card}>
         <div className={css.roleHero}>
           {settlement.winner === 'landlord'
-            ? <img className={`${css.roleHeroImg} ${css.avatarLandlord}`} src={ROLE_ICONS.landlord} alt="地主" />
+            ? <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
             : (
               <>
                 <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
