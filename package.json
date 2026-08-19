@@ -57,7 +57,7 @@
     "verify": "pnpm typecheck && pnpm build && pnpm test",
     "changeset": "pnpm change",
     "ci:version": "pnpm version -r --no-git-checks",
-    "ci:publish": "pnpm publish --access public --no-git-checks --provenance && node -p \"'New tag: v'+JSON.parse(require('node:fs').readFileSync('package.json','utf8')).version\""
+    "ci:publish": "pnpm publish --access public --no-git-checks --provenance"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

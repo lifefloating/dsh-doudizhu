@@ -34,7 +34,7 @@ pnpm change       # 写 .changeset/*.md，跟代码一起提交
 pnpm version -r   # 吃掉 pending intents，改 version / CHANGELOG
 ```
 
-合进 `main` 会开 Version PR；再合那条 PR 才 `pnpm publish`（OIDC，不要 `NPM_TOKEN`）。
+合进 `main` 后 Release workflow 直接 `pnpm version -r` 再 `pnpm publish`（OIDC，不要 `NPM_TOKEN`，不要 `changesets/action`）。
 
 `verify` = typecheck + build + test。CI 跑完还会 `git diff --exit-code`，别把构建产物留在工作区。
 

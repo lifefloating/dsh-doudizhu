@@ -53,7 +53,7 @@ pnpm build
 pnpm verify    # typecheck + build + test
 ```
 
-发版用 pnpm 11 自带的 changeset。改完跑 `pnpm change`，把 `.changeset/*.md` 跟代码一起提交。合进 `main` 后 Actions 会开 Version PR；把那条 PR 再合进 `main` 就会用 npm OIDC 发包，不需要 `NPM_TOKEN`。
+发版用 pnpm 11 自带的 `pnpm change`。改完写一条 `.changeset/*.md` 跟代码一起提交。合进 `main` 后 Actions 会 `pnpm version -r` 再 OIDC 发包，不需要 `NPM_TOKEN`，也不走 `changesets/action`。
 
 npm 包设置里要把 Trusted Publisher 配成 GitHub Actions，workflow 文件名填 `release.yml`。
 

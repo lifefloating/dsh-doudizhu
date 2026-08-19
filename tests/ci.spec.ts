@@ -17,18 +17,18 @@ describe('CI', () => {
     expect(workflow).not.toContain('pnpm publish')
   })
 
-  it('publishes from main with changesets and npm OIDC', () => {
+  it('publishes from main with pnpm versioning and npm OIDC', () => {
     const workflow = readFileSync(
       join(process.cwd(), '.github/workflows/release.yml'),
       'utf8',
     )
     expect(workflow).toContain('branches: [main]')
     expect(workflow).toContain('id-token: write')
-    expect(workflow).toContain('pull-requests: write')
-    expect(workflow).toContain('changesets/action@v1')
-    expect(workflow).toContain('pnpm ci:version')
-    expect(workflow).toContain('pnpm ci:publish')
+    expect(workflow).toContain('pnpm version -r')
+    expect(workflow).toContain('pnpm publish')
+    expect(workflow).toContain('--provenance')
     expect(workflow).toContain('pnpm verify')
+    expect(workflow).not.toContain('changesets/action')
     expect(workflow).not.toContain('NPM_TOKEN')
     expect(workflow).not.toContain('NODE_AUTH_TOKEN')
   })
@@ -48,7 +48,6 @@ describe('CI', () => {
     expect(pkg.scripts['ci:version']).toContain('pnpm version -r')
     expect(pkg.scripts['ci:publish']).toContain('pnpm publish')
     expect(pkg.scripts['ci:publish']).toContain('--provenance')
-    expect(pkg.scripts['ci:publish']).toContain('New tag:')
     expect(pkg.scripts['ci:publish']).not.toContain('NPM_TOKEN')
   })
 })

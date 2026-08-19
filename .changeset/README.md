@@ -8,4 +8,4 @@ pnpm change
 
 That writes a `.changeset/*.md` file. Commit it with the change.
 
-Merging to `main` opens or updates a Version PR (`pnpm version -r`). Merging that PR publishes to npm with OIDC trusted publishing. Do not add `@changesets/cli`.
+Merging to `main` runs `pnpm version -r` and publishes with npm OIDC. Do not add `@changesets/cli` or `changesets/action`.
