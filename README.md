@@ -53,4 +53,8 @@ pnpm build
 pnpm verify    # typecheck + build + test
 ```
 
+发版用 pnpm 11 自带的 changeset。改完跑 `pnpm change`，把 `.changeset/*.md` 跟代码一起提交。合进 `main` 后 Actions 会开 Version PR；把那条 PR 再合进 `main` 就会用 npm OIDC 发包，不需要 `NPM_TOKEN`。
+
+npm 包设置里要把 Trusted Publisher 配成 GitHub Actions，workflow 文件名填 `release.yml`。
+
 从 GitHub 装源码要先开 `allowBuilds.dsh-doudizhu: true`，安装时会跑 `prepare` 编出 `lib/`。

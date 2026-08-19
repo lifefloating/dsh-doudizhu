@@ -19,6 +19,7 @@ src/join/             好友加入页（独立 IIFE）
 types/shims/*.ts      给 typecheck 用的手写桩，不是真实运行时
 scripts/              从官方复制的 client bundle 预设
 lib/                  构建产物，不提交
+.changeset/           pnpm change 写出的发版意图，不是 @changesets/cli
 ```
 
 ## 命令
@@ -29,7 +30,11 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm verify
+pnpm change       # 写 .changeset/*.md，跟代码一起提交
+pnpm version -r   # 吃掉 pending intents，改 version / CHANGELOG
 ```
+
+合进 `main` 会开 Version PR；再合那条 PR 才 `pnpm publish`（OIDC，不要 `NPM_TOKEN`）。
 
 `verify` = typecheck + build + test。CI 跑完还会 `git diff --exit-code`，别把构建产物留在工作区。
 

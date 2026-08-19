@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+# Single-package repo. Root is always a workspace member.
+versioning:
+  changelog:
+    storage: repository

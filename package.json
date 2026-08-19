@@ -42,17 +42,27 @@
     "cordis.patch.yml",
     "src/client/assets/**"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lifefloating/dsh-doudizhu.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prepare": "tsc -p tsconfig.build.json --noEmit && tsdown --config tsdown.config.ts && tsdown --config tsdown.client.ts && tsdown --config tsdown.join.ts",
     "build": "pnpm prepare",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.client.json --noEmit",
-    "verify": "pnpm typecheck && pnpm build && pnpm test"
+    "verify": "pnpm typecheck && pnpm build && pnpm test",
+    "changeset": "pnpm change",
+    "ci:version": "pnpm version -r --no-git-checks",
+    "ci:publish": "pnpm publish --access public --no-git-checks --provenance && node -p \"'New tag: v'+JSON.parse(require('node:fs').readFileSync('package.json','utf8')).version\""
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
-  "packageManager": "pnpm@10.25.0",
+  "packageManager": "pnpm@11.22.0",
   "dependencies": {
     "ws": "^8.18.3",
     "zod": "^4.4.3"
