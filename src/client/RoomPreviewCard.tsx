@@ -1,5 +1,6 @@
 import { formatM } from '../settle/math.ts'
 import { parseAtoms, type RoomPreview } from '../types.ts'
+import { ALREADY_IN_ROOM_MESSAGE } from './presence.ts'
 import css from './styles.module.css'
 
 export function RoomPreviewCard({
@@ -14,7 +15,8 @@ export function RoomPreviewCard({
   error: string | null
 }) {
   const mode = preview.laiZi ? '癞子' : '经典'
-  const action = preview.canSit ? '确定进入' : '观战进入'
+  const already = preview.alreadyInRoom
+  const action = already ? '已在房间' : preview.canSit ? '确定进入' : '观战进入'
   return (
     <div className={css.preview}>
       <h2>房间信息</h2>
@@ -37,17 +39,19 @@ export function RoomPreviewCard({
           </li>
         ))}
       </ul>
-      {preview.canSit
-        ? (
-          <label className={css.field}>
-            昵称
-            <input className={css.input} value={name} maxLength={16} onChange={(event) => { onName(event.target.value) }} />
-          </label>
-        )
-        : <p className={css.hint}>座位已满或已经开打，进去后观战。</p>}
+      {already
+        ? <p className={css.hint}>{ALREADY_IN_ROOM_MESSAGE}</p>
+        : preview.canSit
+          ? (
+            <label className={css.field}>
+              昵称
+              <input className={css.input} value={name} maxLength={16} onChange={(event) => { onName(event.target.value) }} />
+            </label>
+          )
+          : <p className={css.hint}>座位已满或已经开打，进去后观战。</p>}
       <div className={css.previewActions}>
         <button type="button" className={css.ghost} onClick={onBack} disabled={confirming}>返回</button>
-        <button type="button" className={css.primary} onClick={onConfirm} disabled={confirming}>
+        <button type="button" className={css.primary} onClick={onConfirm} disabled={confirming || already}>
           {confirming ? '进入中…' : action}
         </button>
       </div>

@@ -37,7 +37,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     promptCtx.systemPrompt?.section({
       name: 'plugin:doudizhu',
       order: 200,
-      text: '本机已安装 dsh-poker。开房走侧栏 New Session 下面的「斗地主」，首页可创建或加入，支持 3 人/4 人、经典/癞子。结算是 Host 欢迎积分账本，不是 DeepSeek 平台余额。',
+      text: '本机已安装 dsh-poker。开房走侧栏 New Session 下面的 dsh-poker tab，创建和加入都留在这个 tab 里，不要打开独立加入页。支持 3 人/4 人、经典/癞子。结算是 Host 欢迎积分账本，不是 DeepSeek 平台余额。',
     })
   })
 }

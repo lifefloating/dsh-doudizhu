@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DEFAULT_TURN_TIMEOUT_SEC, turnTimeoutSecFromMs } from '../config.ts'
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_STAKE_M, DEFAULT_WELCOME_ATOMS } from '../settle/math.ts'
 import type { CardId, ClientCommand, PlayerView, RoomPreview, SeatCount } from '../types.ts'
-import { connectChannel, createRoom, joinRoom, peekRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
+import { doudizhuTabHash, parseDoudizhuHash } from './hash.ts'
+import {
+  connectChannel, createRoom, fetchPluginReady, joinRoom, leaveHere, peekRoom, sendCommand, type CreateRoomResponse,
+} from './host-api.ts'
+import { GithubLink, RoomCodeBar } from './InviteDialog.tsx'
 import { LobbyView } from './LobbyView.tsx'
+import { ALREADY_IN_ROOM_MESSAGE, claimRoomPresence, roomOccupiedHere } from './presence.ts'
 import { RoomPreviewCard } from './RoomPreviewCard.tsx'
 import { SettlementView } from './SettlementView.tsx'
-import { emptyState, toggleCard } from './store.ts'
+import { emptyState, retainSelected, toggleCard } from './store.ts'
+import { tableBalance, tableMeta, useDeadline } from './table-chrome.ts'
 import { TableView } from './TableView.tsx'
 import css from './styles.module.css'
 
@@ -21,29 +28,78 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   const [joinName, setJoinName] = useState('好友')
   const [preview, setPreview] = useState<RoomPreview | null>(null)
   const [state, setState] = useState(emptyState)
+  const [turnTimeoutSec, setTurnTimeoutSec] = useState(DEFAULT_TURN_TIMEOUT_SEC)
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [roomId, setRoomId] = useState<string | null>(null)
   const seq = useMemo(() => ({ value: 0 }), [])
+  const channelRef = useRef<(() => void) | null>(null)
+  const presenceRef = useRef<(() => void) | null>(null)
+  const joinedHereRef = useRef(false)
+
+  const dropLive = (): void => {
+    channelRef.current?.()
+    channelRef.current = null
+    presenceRef.current?.()
+    presenceRef.current = null
+  }
 
   useEffect(() => {
     const onHash = (): void => {
-      const match = /#\/doudizhu\/room\/([^/]+)/.exec(location.hash)
-      if (match) setRoomId(match[1] ?? null)
+      const parsed = parseDoudizhuHash(location.hash)
+      if (parsed.roomId) setRoomId(parsed.roomId)
     }
     onHash()
     window.addEventListener('hashchange', onHash)
-    return () => { window.removeEventListener('hashchange', onHash) }
+    const teardown = (): void => {
+      channelRef.current?.()
+      channelRef.current = null
+      presenceRef.current?.()
+      presenceRef.current = null
+      if (joinedHereRef.current) leaveHere()
+      joinedHereRef.current = false
+    }
+    window.addEventListener('pagehide', teardown)
+    return () => {
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('pagehide', teardown)
+      teardown()
+    }
   }, [])
 
   useEffect(() => {
-    if (!roomId || !state.view) return
-    return undefined
-  }, [roomId, state.view])
+    let cancelled = false
+    void fetchPluginReady().then((ready) => {
+      if (cancelled || typeof ready.turnTimeoutMs !== 'number') return
+      setTurnTimeoutSec(turnTimeoutSecFromMs(ready.turnTimeoutMs))
+    }).catch(() => { /* keep default */ })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const parsed = parseDoudizhuHash(location.hash)
+    if (!parsed.code) return
+    setTab('join')
+    setJoinCode(parsed.code)
+    setJoinInvite(parsed.invite)
+    let cancelled = false
+    setPreviewing(true)
+    setState((prev) => ({ ...prev, error: null }))
+    void peekRoom({ roomCode: parsed.code, invite: parsed.invite }).then((next) => {
+      if (!cancelled) setPreview(next)
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'preview failed' }))
+      }
+    }).finally(() => {
+      if (!cancelled) setPreviewing(false)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const applyView = (view: PlayerView): void => {
-    setState((prev) => ({ ...prev, view, selected: prev.selected.filter((card) => view.you.cards.includes(card)) }))
+    setState((prev) => ({ ...prev, view, selected: retainSelected(prev.selected, view.you.cards) }))
   }
 
   const startRoom = async (): Promise<void> => {
@@ -62,8 +118,8 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         watchUrl: created.watchUrl,
         roomCode: created.roomCode,
       }))
-      location.hash = `#/doudizhu/room/${created.roomId}`
-      listenRoom(created.roomId, created.wsTicket)
+      location.hash = doudizhuTabHash({ roomId: created.roomId })
+      listenRoom(created.roomId, created.wsTicket, created.roomCode)
     } catch (error) {
       setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'create failed' }))
     } finally {
@@ -87,8 +143,13 @@ export function HostApp({ onClose }: { onClose: () => void }) {
     setJoining(true)
     setState((prev) => ({ ...prev, error: null }))
     try {
+      const code = joinCode.trim()
+      if (preview?.alreadyInRoom || await roomOccupiedHere(code)) {
+        setState((prev) => ({ ...prev, error: ALREADY_IN_ROOM_MESSAGE }))
+        return
+      }
       const result = await joinRoom({
-        roomCode: joinCode.trim(),
+        roomCode: code,
         invite: joinInvite.trim(),
         displayName: joinName,
         role: preview && !preview.canSit ? 'watch' : 'sit',
@@ -97,8 +158,8 @@ export function HostApp({ onClose }: { onClose: () => void }) {
       applyView(result.view)
       setPreview(null)
       setState((prev) => ({ ...prev, roomCode: result.view.room.roomCode }))
-      location.hash = `#/doudizhu/room/${result.roomId}`
-      listenRoom(result.roomId, result.wsTicket)
+      location.hash = doudizhuTabHash({ roomId: result.roomId })
+      listenRoom(result.roomId, result.wsTicket, result.view.room.roomCode)
     } catch (error) {
       setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'join failed' }))
     } finally {
@@ -106,8 +167,20 @@ export function HostApp({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const listenRoom = (nextRoomId: string, ticket: string): void => {
-    connectChannel(ticket, (event) => {
+  const dropToLobby = (error: string): void => {
+    dropLive()
+    joinedHereRef.current = false
+    setRoomId(null)
+    setPreview(null)
+    setState({ ...emptyState(), error })
+    location.hash = doudizhuTabHash()
+  }
+
+  const listenRoom = (nextRoomId: string, ticket: string, roomCode: string): void => {
+    dropLive()
+    joinedHereRef.current = true
+    presenceRef.current = claimRoomPresence(roomCode)
+    channelRef.current = connectChannel(ticket, (event) => {
       if (event.type === 'snapshot') {
         seq.value = event.seq
         applyView(event.view)
@@ -117,10 +190,10 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         setState((prev) => ({ ...prev, settlement: event.settlement }))
       }
       if (event.type === 'kicked') {
-        setRoomId(null)
-        setPreview(null)
-        setState({ ...emptyState(), error: '房主把你踢出了房间' })
-        location.hash = '#/doudizhu'
+        dropToLobby('房主把你踢出了房间')
+      }
+      if (event.type === 'left') {
+        dropToLobby('连接断开，已离开房间')
       }
       if (event.type === 'reject') {
         setState((prev) => ({ ...prev, error: event.reason }))
@@ -135,11 +208,37 @@ export function HostApp({ onClose }: { onClose: () => void }) {
     })
   }
 
+  const view = state.view
+  const showSettlement = Boolean(state.settlement && view?.room.phase === 'waiting')
+  const inTable = Boolean(view) && !showSettlement
+  const seconds = useDeadline(
+    inTable && view && (view.room.phase === 'playing' || view.room.phase === 'bidding' || view.room.phase === 'doubling')
+      ? view.deadlineAt
+      : null,
+  )
+
   return (
     <div className={css.root}>
       <div className={css.topbar}>
-        <div className={css.brand}>斗地主</div>
-        <button type="button" className={css.close} onClick={onClose}>关闭</button>
+        {inTable && view && state.roomCode
+          ? (
+            <RoomCodeBar
+              brand="斗地主"
+              title={view.room.title}
+              roomCode={state.roomCode}
+              {...(state.sitUrl ? { sitUrl: state.sitUrl } : {})}
+              shareable={state.shareable}
+              canRename
+              onRename={(next) => { command({ type: 'rename', title: next }) }}
+              meta={tableMeta(view, seconds)}
+              aside={<span className={css.muted}>{tableBalance(view)}</span>}
+            />
+          )
+          : <div className={css.brand}>斗地主</div>}
+        <div className={css.topbarActions} data-topbar-actions="">
+          <GithubLink />
+          <button type="button" className={css.close} onClick={onClose}>关闭</button>
+        </div>
       </div>
       {state.error ? <div className={css.banner}>{state.error}</div> : null}
       {!state.view
@@ -181,6 +280,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
             watchUrl={state.watchUrl}
             shareable={state.shareable}
             welcomeAtoms={DEFAULT_WELCOME_ATOMS}
+            turnTimeoutSec={turnTimeoutSec}
             join={{
               code: joinCode,
               invite: joinInvite,
@@ -221,11 +321,6 @@ export function HostApp({ onClose }: { onClose: () => void }) {
               onStart={() => { command({ type: 'start' }) }}
               onKick={(playerId) => { command({ type: 'hostKick', playerId }) }}
               onChat={(text) => { command({ type: 'chat', text }) }}
-              roomCode={state.roomCode}
-              sitUrl={state.sitUrl}
-              shareable={state.shareable}
-              canRename
-              onRename={(next) => { command({ type: 'rename', title: next }) }}
             />
           )}
     </div>

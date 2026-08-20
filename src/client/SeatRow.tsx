@@ -5,7 +5,8 @@ import { SeatAvatar } from './SeatAvatar.tsx'
 import css from './styles.module.css'
 
 export function SeatRow({
-  seat, align = 'left', revealed, mingPai = false, laiZiRanks = [], waiting = false, host = false, canKick = false, onKick,
+  seat, align = 'left', revealed, mingPai = false, laiZiRanks = [], waiting = false, host = false,
+  canKick = false, playing = false, onKick,
 }: {
   seat: SeatState
   align?: 'left' | 'right' | 'center'
@@ -15,18 +16,29 @@ export function SeatRow({
   waiting?: boolean
   host?: boolean
   canKick?: boolean
+  playing?: boolean
   onKick?: () => void
 }) {
   const alignClass = align === 'right' ? css.seatRight : align === 'center' ? css.seatCenter : ''
   return (
     <div className={`${css.seat} ${alignClass}`}>
       <div className={css.seatHead}>
-        <SeatAvatar
-          avatarUrl={seat.avatarUrl}
-          role={seat.role}
-          seat={seat.seat}
-          occupied={Boolean(seat.playerId)}
-        />
+        <div className={css.seatAvatarWrap}>
+          {playing
+            ? (
+              <div className={css.turnCue} data-turn-cue="">
+                <span className={css.turnCueText}>出牌中…</span>
+                <span className={css.turnArrow} aria-hidden="true" />
+              </div>
+            )
+            : null}
+          <SeatAvatar
+            avatarUrl={seat.avatarUrl}
+            role={seat.role}
+            seat={seat.seat}
+            occupied={Boolean(seat.playerId)}
+          />
+        </div>
         <div className={css.seatMeta}>
           <div className={css.seatName}>
             {seat.displayName ?? '空座'}

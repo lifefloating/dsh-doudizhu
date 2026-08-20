@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { formatM } from '../settle/math.ts'
 import {
-  holeCount, parseAtoms, type BidAction, type CardId, type DoubleAction, type PlayerId,
+  holeCount, type BidAction, type CardId, type DoubleAction, type PlayerId,
   type PlayerView, type Seat, type SeatState,
 } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
@@ -9,16 +8,15 @@ import { DealAnimation } from './DealAnimation.tsx'
 import { FlipCard } from './FlipCard.tsx'
 import { HandFan } from './HandFan.tsx'
 import { PlayFly } from './PlayFly.tsx'
-import { RoomCodeBar } from './InviteDialog.tsx'
 import { SeatAvatar } from './SeatAvatar.tsx'
 import { SeatRow } from './SeatRow.tsx'
 import { opponentSeats } from './seat-layout.ts'
 import { selectionLegal } from './store.ts'
+import { opponentTurnCue, yourTurnToastKey } from './turn-cue.ts'
 import css from './styles.module.css'
 
 export function TableView({
   view, selected, onToggle, onBid, onDouble, onMingPai, onPlay, onPass, onReady, onStart, onKick, onChat,
-  roomCode, sitUrl, shareable, canRename, onRename,
 }: {
   view: PlayerView
   selected: CardId[]
@@ -32,21 +30,20 @@ export function TableView({
   onStart?: () => void
   onKick?: (playerId: PlayerId) => void
   onChat: (text: string) => void
-  roomCode?: string
-  sitUrl?: string
-  shareable?: boolean
-  canRename?: boolean
-  onRename?: (title: string) => void
 }) {
   const seats = view.room.seats
   const count = view.room.seatCount ?? (seats.length >= 4 ? 4 : 3)
-  const self = view.you.seat ?? 0
-  const opponents = opponentSeats(self, count).map((seat) => seatAt(seats, seat))
-  const mine = seatAt(seats, self)
+  const selfSeat = view.you.seat
+  const layoutSelf = selfSeat ?? 0
+  const opponents = (selfSeat === null
+    ? Array.from({ length: count }, (_, index) => index as Seat)
+    : opponentSeats(layoutSelf, count)
+  ).map((seat) => seatAt(seats, seat))
+  const mine = seatAt(seats, layoutSelf)
+  const toastKey = yourTurnToastKey(view)
   const legal = selectionLegal(view, selected)
   const phase = view.room.phase
   const laiZi = view.laiZiRanks ?? []
-  const seconds = useDeadline(phase === 'playing' || phase === 'bidding' ? view.deadlineAt : null)
   const seated = seats.filter((seat) => seat.playerId).length
   const isHost = view.you.playerId === view.room.hostPlayerId
   const guestsReady = seats
@@ -55,42 +52,13 @@ export function TableView({
   const tableFull = seated === count
   const canStart = isHost && phase === 'waiting' && tableFull && guestsReady
   const waiting = phase === 'waiting'
+  const statusCopy = waiting ? waitingStatusCopy(isHost, canStart) : null
+  const bidWaitCopy = biddingWaitCopy(view)
   return (
     <div className={css.table} data-table>
-      <div className={css.tableBar}>
-        {roomCode
-          ? (
-            <RoomCodeBar
-              title={view.room.title}
-              roomCode={roomCode}
-              {...(sitUrl ? { sitUrl } : {})}
-              {...(shareable !== undefined ? { shareable } : {})}
-              {...(canRename ? { canRename } : {})}
-              {...(onRename ? { onRename } : {})}
-              meta={`${count}人${view.room.laiZi ? '癞子' : '经典'} · 底注 ${formatM(parseAtoms(view.room.stakeAtoms))} · ${view.bid ? `${view.bid}倍` : '未叫'} · ${phaseLabel(phase)}`}
-              aside={<span className={css.muted}>余额 {formatM(parseAtoms(view.yourAvailableAtoms))} · 冻结 {formatM(parseAtoms(view.yourEscrowAtoms))}</span>}
-            />
-          )
-          : (
-            <>
-              <div>
-                {view.room.title || '好友局'} · {count}人{view.room.laiZi ? '癞子' : '经典'} · 底注 {formatM(parseAtoms(view.room.stakeAtoms))} · {view.bid ? `${view.bid}倍` : '未叫'} · {phaseLabel(phase)}
-              </div>
-              <div className={css.muted}>余额 {formatM(parseAtoms(view.yourAvailableAtoms))} · 冻结 {formatM(parseAtoms(view.yourEscrowAtoms))}</div>
-            </>
-          )}
-      </div>
-      {seconds !== null
-        ? (
-          <div className={`${css.timer} ${seconds <= 10 ? css.timerUrgent : ''}`}>
-            {phase === 'bidding' ? '叫抢剩余' : '出牌剩余'} <strong>{seconds}</strong> 秒
-          </div>
-        )
-        : waiting
-          ? <div className={css.hint}>{seated}/{count} 人入座。好友点准备，齐了由房主开打。</div>
-          : phase === 'dealing'
-            ? <div className={css.hint}>发牌中…</div>
-            : null}
+      {waiting
+        ? <div className={css.hint}>{seated}/{count} 人入座。好友点准备，齐了由房主开打。</div>
+        : null}
       {laiZi.length > 0
         ? <div className={css.muted}>癞子：{laiZi.join('、')}</div>
         : null}
@@ -106,21 +74,26 @@ export function TableView({
             waiting={waiting}
             host={seat.playerId === view.room.hostPlayerId}
             canKick={isHost && waiting && Boolean(seat.playerId) && seat.playerId !== view.room.hostPlayerId}
+            playing={opponentTurnCue(view, seat.seat)}
             {...(seat.playerId && onKick ? { onKick: () => { onKick(seat.playerId!) } } : {})}
           />
         ))}
       </div>
       <div className={css.centerPlay} data-play-zone>
         {phase === 'dealing'
-          ? <DealAnimation seatCount={count} selfSeat={self} />
+          ? <DealAnimation seatCount={count} selfSeat={layoutSelf} />
           : view.lastPlays.slice(-1).map((play, index) => (
             play.type === 'pass'
               ? <span key={index} className={css.muted}>过</span>
               : <PlayFly key={`${play.seq}-${index}`} cards={play.cards} laiZiRanks={laiZi} />
           ))}
+        {toastKey ? <YourTurnToast turnKey={toastKey} /> : null}
+        {bidWaitCopy
+          ? <p className={css.tableStatus} data-bid-wait="">{bidWaitCopy}</p>
+          : null}
         {waiting && !view.you.spectator
           ? (
-            <div className={css.readyCenter}>
+            <div className={css.readyCenter} data-ready-center="">
               {isHost
                 ? canStart
                   ? (
@@ -138,6 +111,8 @@ export function TableView({
                     {mine?.ready ? '取消准备' : '准备'}
                   </button>
                 )}
+              {statusCopy ? <p className={css.hint}>{statusCopy}</p> : null}
+              <MingPaiButton view={view} {...(onMingPai ? { onMingPai } : {})} />
             </div>
           )
           : null}
@@ -172,7 +147,7 @@ export function TableView({
               <SeatAvatar
                 avatarUrl={mine?.avatarUrl ?? null}
                 role={mine?.role ?? 'empty'}
-                seat={self}
+                seat={layoutSelf}
                 occupied={Boolean(mine?.playerId)}
                 self
               />
@@ -181,7 +156,7 @@ export function TableView({
                 {isHost ? <span className={css.badge}>房主</span> : null}
                 {mine?.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
                 {mine?.role === 'farmer' ? <span className={css.badge}>农民</span> : null}
-                {view.mingPaiBySeat?.[self] ? <span className={css.badge}>明牌</span> : null}
+                {selfSeat !== null && view.mingPaiBySeat?.[selfSeat] ? <span className={css.badge}>明牌</span> : null}
               </div>
               {waiting && !isHost
                 ? <div className={mine?.ready ? css.ready : css.muted}>{mine?.ready ? '已准备' : '未准备'}</div>
@@ -196,9 +171,6 @@ export function TableView({
                   <ActionBar
                     view={view}
                     legal={legal}
-                    waiting={waiting}
-                    isHost={isHost}
-                    canStart={canStart}
                     onBid={onBid}
                     onDouble={onDouble}
                     {...(onMingPai ? { onMingPai } : {})}
@@ -220,14 +192,11 @@ export function TableView({
               )}
           </div>
         )}
-      {view.you.spectator || phase === 'waiting' || phase === 'dealing'
+      {phase === 'dealing' && !view.you.spectator
         ? (
           <ActionBar
             view={view}
             legal={legal}
-            waiting={waiting}
-            isHost={isHost}
-            canStart={canStart}
             onBid={onBid}
             onDouble={onDouble}
             {...(onMingPai ? { onMingPai } : {})}
@@ -257,6 +226,21 @@ export function TableView({
   )
 }
 
+function YourTurnToast({ turnKey }: { turnKey: string }) {
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    setVisible(true)
+    const hide = window.setTimeout(() => { setVisible(false) }, 1000)
+    return () => { window.clearTimeout(hide) }
+  }, [turnKey])
+  if (!visible) return null
+  return (
+    <div className={css.yourTurnToast} data-your-turn-toast="" aria-live="polite">
+      轮到你出牌了~
+    </div>
+  )
+}
+
 function seatAt(seats: readonly SeatState[], index: number): SeatState {
   return seats[index] ?? {
     seat: index as Seat,
@@ -276,25 +260,11 @@ function isTurn(view: PlayerView): boolean {
   return view.you.seat !== null && view.turnSeat === view.you.seat
 }
 
-function useDeadline(deadlineAt: string | null): number | null {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!deadlineAt) return undefined
-    const tick = setInterval(() => { setNow(Date.now()) }, 250)
-    return () => { clearInterval(tick) }
-  }, [deadlineAt])
-  if (!deadlineAt) return null
-  return Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000))
-}
-
 function ActionBar({
-  view, legal, waiting, isHost, canStart, onBid, onDouble, onMingPai, onPlay, onPass,
+  view, legal, onBid, onDouble, onMingPai, onPlay, onPass,
 }: {
   view: PlayerView
   legal: boolean
-  waiting: boolean
-  isHost: boolean
-  canStart: boolean
   onBid: (action: BidAction) => void
   onDouble: (action: DoubleAction) => void
   onMingPai?: () => void
@@ -302,14 +272,14 @@ function ActionBar({
   onPass: () => void
 }) {
   const phase = view.room.phase
+  const [pendingDouble, setPendingDouble] = useState<DoubleAction | null>(null)
+  useEffect(() => {
+    if (phase !== 'doubling') setPendingDouble(null)
+    else if (view.yourDouble) setPendingDouble(view.yourDouble)
+  }, [phase, view.yourDouble])
+  const answered = view.yourDouble ?? pendingDouble
   return (
     <div className={css.actions} data-actions>
-      {waiting && !view.you.spectator
-        ? <p className={css.hint}>{isHost ? (canStart ? '好友都准备好了，可以开打。' : '等好友点准备。') : '点中间黄色按钮准备，再点一次取消。'}</p>
-        : null}
-      {phase === 'bidding' && !view.you.spectator && !isTurn(view)
-        ? <p className={css.hint}>{view.auction?.kind === 'rob' ? '等待下家抢地主' : '等待下家叫地主'}</p>
-        : null}
       {phase === 'bidding' && isTurn(view)
         ? (
           <>
@@ -329,17 +299,17 @@ function ActionBar({
           </>
         )
         : null}
-      {canMingPai(view) && onMingPai
-        ? <button type="button" className={css.ghost} onClick={onMingPai}>明牌</button>
-        : null}
+      {phase !== 'waiting' ? <MingPaiButton view={view} {...(onMingPai ? { onMingPai } : {})} /> : null}
       {phase === 'doubling' && !view.you.spectator
-        ? (
-          <>
-            <button type="button" className={css.ghost} onClick={() => { onDouble('pass') }}>不加倍</button>
-            <button type="button" className={css.primary} onClick={() => { onDouble('double') }}>加倍 ×2</button>
-            <button type="button" className={css.primary} onClick={() => { onDouble('reDouble') }}>超级加倍 ×4</button>
-          </>
-        )
+        ? answered
+          ? <p className={css.hint} data-double-answered="">{doubleAnswerLabel(answered)}</p>
+          : (
+            <>
+              <button type="button" className={css.ghost} onClick={() => { setPendingDouble('pass'); onDouble('pass') }}>不加倍</button>
+              <button type="button" className={css.primary} onClick={() => { setPendingDouble('double'); onDouble('double') }}>加倍 ×2</button>
+              <button type="button" className={css.primary} onClick={() => { setPendingDouble('reDouble'); onDouble('reDouble') }}>超级加倍 ×4</button>
+            </>
+          )
         : null}
       {phase === 'playing' && isTurn(view) && !view.you.spectator
         ? (
@@ -350,6 +320,15 @@ function ActionBar({
         )
         : null}
     </div>
+  )
+}
+
+function MingPaiButton({ view, onMingPai }: { view: PlayerView; onMingPai?: () => void }) {
+  if (!canMingPai(view) || !onMingPai) return null
+  return (
+    <button type="button" className={css.ghost} onClick={onMingPai}>
+      明牌
+    </button>
   )
 }
 
@@ -365,14 +344,20 @@ function canMingPai(view: PlayerView): boolean {
   return false
 }
 
-function phaseLabel(phase: PlayerView['room']['phase']): string {
-  if (phase === 'waiting') return '准备'
-  if (phase === 'dealing') return '发牌'
-  if (phase === 'bidding') return '叫抢'
-  if (phase === 'doubling') return '加倍'
-  if (phase === 'playing') return '出牌'
-  if (phase === 'settling') return '结算'
-  return phase
+function waitingStatusCopy(isHost: boolean, canStart: boolean): string | null {
+  if (isHost) return canStart ? '好友都准备好了，可以开打。' : null
+  return '点中间黄色按钮准备，再点一次取消。'
+}
+
+function biddingWaitCopy(view: PlayerView): string | null {
+  if (view.room.phase !== 'bidding' || view.you.spectator || isTurn(view)) return null
+  return view.auction?.kind === 'rob' ? '等待下家抢地主' : '等待下家叫地主'
+}
+
+function doubleAnswerLabel(action: DoubleAction): string {
+  if (action === 'reDouble') return '已超级加倍 ×4'
+  if (action === 'double') return '已加倍 ×2'
+  return '已不加倍'
 }
 
 export type { Seat }

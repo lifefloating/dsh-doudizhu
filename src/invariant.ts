@@ -8,6 +8,13 @@ export const MAX_CHAT = 80
 export const MAX_SPECTATORS = 16
 /** After a seat times out once, later turns play this quickly (托管). */
 export const AUTO_PLAY_MS = 1_500
+/**
+ * Waiting-phase guests who drop the socket leave after this grace.
+ * Long enough for the HTTP poll fallback to resume; tab close still
+ * frees the seat via `pagehide` / `/api/leave`. Tests may override
+ * with `leaveWaitingMs`.
+ */
+export const LEAVE_WAITING_MS = 2_000
 /** Shuffle-to-center before the first card flies. Must match DealAnimation. */
 export const DEAL_SHUFFLE_MS = 1050
 /** Stagger between consecutive flying cards. Must match DealAnimation. */

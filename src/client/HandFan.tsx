@@ -43,9 +43,10 @@ export function HandFan({
 
   useLayoutEffect(() => {
     const reduced = prefersReducedMotion()
-    const picked = new Set(selected)
+    const picked = new Set(selectedKey === '' ? [] : selectedKey.split(','))
     const nodes: HTMLButtonElement[] = []
-    cards.forEach((card, index) => {
+    const list = cardsRef.current
+    list.forEach((card, index) => {
       const node = itemRefs.current.get(card)
       if (!node) return
       nodes.push(node)
@@ -65,7 +66,7 @@ export function HandFan({
         if (!node.dataset.dragging) gsap.killTweensOf(node)
       }
     }
-  }, [cards, count, hovered, key, selected, selectedKey])
+  }, [count, hovered, key, selectedKey])
 
   useLayoutEffect(() => {
     if (prefersReducedMotion()) return undefined

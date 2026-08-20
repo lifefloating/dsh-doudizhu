@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ROLE_ICONS, roleIconSrc } from '../../src/client/SeatAvatar.tsx'
 import { joinAsset } from '../../src/net/join-page.ts'
@@ -18,5 +20,12 @@ describe('role icons', () => {
     ]) {
       expect(joinAsset(name)?.type).toBe('image/png')
     }
+  })
+
+  it('keeps the spectator sprite on a transparent cutout like seated farmers', () => {
+    const file = readFileSync(join(process.cwd(), 'src/client/assets/role-spectator.png'))
+    expect(file[25]).toBe(6)
+    const served = joinAsset('role-spectator.png')
+    expect(served?.body[25]).toBe(6)
   })
 })

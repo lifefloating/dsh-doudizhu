@@ -1,11 +1,11 @@
 import { addHours, cookieValue, inviteHash, nowIso, randomId, randomRoomCode, randomToken, sha256Hex } from '../crypto.ts'
 import {
-  applyBid, applyDouble, applyMingPai, applyPass, applyPlay, autoTimeout, createHand, expireDoubling,
-  legalFor, snapshotHand, type EngineState,
+  applyBid, applyDouble, applyMingPai, applyPass, applyPlay, autoTimeout, createHand, doubleAnswerOf,
+  expireDoubling, legalFor, snapshotHand, type EngineState,
 } from '../engine/play.ts'
 import { scoreHand } from '../engine/score.ts'
 import { rankOf } from '../engine/cards.ts'
-import { newPlayerId, sanitizeAvatarUrl, sanitizeDisplayName, sanitizeRoomTitle } from '../identity/player.ts'
+import { newPlayerId, sanitizeAvatarUrl, sanitizeBrowserId, sanitizeDisplayName, sanitizeRoomTitle } from '../identity/player.ts'
 import { AUTO_PLAY_MS, dealAnimationMs, MAX_CHAT, MAX_SPECTATORS } from '../invariant.ts'
 import { createMemoryDomain, openDoudizhuDomain, type DomainLike } from '../persist/domain.ts'
 import { createCounters, type HealthCounters } from '../settle/audit.ts'
@@ -26,6 +26,8 @@ export interface JoinRequest {
   displayName: string
   role: 'sit' | 'watch'
   local?: boolean
+  browserId?: string
+  cookie?: string
 }
 
 export interface JoinResult {
@@ -44,6 +46,7 @@ export interface CreateRoomRequest {
   laiZi?: boolean
   hostDisplayName?: string
   title?: string
+  browserId?: string
 }
 
 export interface CreateRoomResult {
@@ -84,6 +87,8 @@ interface LiveRoom {
   preDealMing: Set<Seat>
   engine: EngineState | null
   deadlineAt: number | null
+  /** Frozen at create so later settings changes do not move this room. */
+  turnTimeoutMs: number
   seq: number
   events: ServerEvent[]
   chat: PlayerView['chat'][number][]
@@ -107,6 +112,10 @@ export class RoomManager {
   private readonly hostCookies = new Set<string>()
   private readonly listeners = new Set<ViewListener>()
   private readonly timers = new Set<ReturnType<typeof setInterval>>()
+  /** browserId + room → player currently occupying that room from this browser. */
+  private readonly browserRooms = new Map<string, PlayerId>()
+  /** In-flight joins so two tabs of the same browser cannot race into two seats. */
+  private readonly joiningBrowsers = new Set<string>()
   readonly counters = createCounters()
   private persistReady: Promise<void>
 
@@ -209,6 +218,7 @@ export class RoomManager {
       preDealMing: new Set(),
       engine: null,
       deadlineAt: null,
+      turnTimeoutMs: this.config.turnTimeoutMs,
       seq: 0,
       events: [],
       chat: [],
@@ -231,6 +241,7 @@ export class RoomManager {
       expiresAt: Date.now() + 86_400_000,
     })
     await this.sitInternal(live, hostPlayerId, 0, displayName)
+    this.claimBrowser(req.browserId, roomId, hostPlayerId)
     const origin = publicBase || `http://127.0.0.1:${this.listenPort()}`
     return {
       roomId,
@@ -250,9 +261,6 @@ export class RoomManager {
     const live = this.roomByCode(req.roomCode)
     if (!live || live.room.phase === 'closed') throw fail('expired', 'room not found')
     if (Date.parse(live.room.inviteExpiresAt) < Date.now()) throw fail('expired', 'invite expired')
-    const displayName = sanitizeDisplayName(req.displayName)
-    const playerId = newPlayerId()
-    await this.ledger.ensurePlayer(playerId, displayName, sanitizeAvatarUrl(null, this.config.routePrefix))
     const invite = req.invite.trim()
     const sitOk = invite
       ? sha256Hex(`${live.secret}|sit|${invite}`) === live.sitInviteHash
@@ -261,34 +269,54 @@ export class RoomManager {
       ? sha256Hex(`${live.secret}|watch|${invite}`) === live.watchInviteHash
       : false
     if (!sitOk && !watchOk) throw fail('auth', invite ? 'invalid invite' : 'room not found')
-    const empty = this.firstEmptySeat(live)
-    const canSit = live.room.phase === 'waiting' && empty !== null && req.role !== 'watch'
-    let seat: Seat | null = null
-    if (canSit) {
-      await this.sitInternal(live, playerId, empty, displayName)
-      seat = empty
-      if (this.firstEmptySeat(live) === null) live.sitConsumed = true
-    } else {
-      if (!this.config.allowSpectators) throw fail('auth', 'spectators disabled')
-      live.sitConsumed = live.sitConsumed || empty === null || live.room.phase !== 'waiting'
-      this.addSpectator(live, playerId)
+    if (this.alreadyInRoom(live, req.browserId, req.cookie)) {
+      throw fail('already-in-room', 'already in this room')
     }
-    const cookie = cookieValue()
-    this.sessions.set(cookie, {
-      cookie,
-      playerId,
-      roomId: live.room.roomId,
-      kind: seat === null ? 'watch' : 'seat',
-      expiresAt: Date.now() + 86_400_000,
-    })
-    this.broadcast(live)
-    return {
-      playerId,
-      roomId: live.room.roomId,
-      seat,
-      wsTicket: this.issueTicket(playerId, live.room.roomId),
-      cookie,
-      view: this.viewFor(live, playerId),
+    const browserId = sanitizeBrowserId(req.browserId)
+    const lockKey = browserId ? this.browserKey(browserId, live.room.roomId) : null
+    if (lockKey) {
+      if (this.joiningBrowsers.has(lockKey)) throw fail('already-in-room', 'already in this room')
+      this.joiningBrowsers.add(lockKey)
+    }
+    try {
+      const displayName = sanitizeDisplayName(req.displayName)
+      const playerId = newPlayerId()
+      await this.ledger.ensurePlayer(playerId, displayName, sanitizeAvatarUrl(null, this.config.routePrefix))
+      if (this.alreadyInRoom(live, req.browserId, req.cookie)) {
+        throw fail('already-in-room', 'already in this room')
+      }
+      const empty = this.firstEmptySeat(live)
+      const canSit = live.room.phase === 'waiting' && empty !== null && req.role !== 'watch'
+      let seat: Seat | null = null
+      if (canSit) {
+        await this.sitInternal(live, playerId, empty, displayName)
+        seat = empty
+        if (this.firstEmptySeat(live) === null) live.sitConsumed = true
+      } else {
+        if (!this.config.allowSpectators) throw fail('auth', 'spectators disabled')
+        live.sitConsumed = live.sitConsumed || empty === null || live.room.phase !== 'waiting'
+        this.addSpectator(live, playerId)
+      }
+      const cookie = cookieValue()
+      this.sessions.set(cookie, {
+        cookie,
+        playerId,
+        roomId: live.room.roomId,
+        kind: seat === null ? 'watch' : 'seat',
+        expiresAt: Date.now() + 86_400_000,
+      })
+      this.claimBrowser(browserId, live.room.roomId, playerId)
+      this.broadcast(live)
+      return {
+        playerId,
+        roomId: live.room.roomId,
+        seat,
+        wsTicket: this.issueTicket(playerId, live.room.roomId),
+        cookie,
+        view: this.viewFor(live, playerId),
+      }
+    } finally {
+      if (lockKey) this.joiningBrowsers.delete(lockKey)
     }
   }
 
@@ -320,7 +348,13 @@ export class RoomManager {
     return this.viewFor(this.requireRoom(roomId), playerId)
   }
 
-  async peek(req: { roomCode: string; invite: string; local?: boolean }): Promise<RoomPreview> {
+  async peek(req: {
+    roomCode: string
+    invite: string
+    local?: boolean
+    browserId?: string
+    cookie?: string
+  }): Promise<RoomPreview> {
     await this.ready()
     const live = this.roomByCode(req.roomCode)
     if (!live || live.room.phase === 'closed') throw fail('expired', 'room not found')
@@ -333,7 +367,7 @@ export class RoomManager {
       ? sha256Hex(`${live.secret}|watch|${invite}`) === live.watchInviteHash
       : false
     if (!sitOk && !watchOk) throw fail('auth', invite ? 'invalid invite' : 'room not found')
-    return this.previewOf(live, sitOk)
+    return this.previewOf(live, sitOk, this.alreadyInRoom(live, req.browserId, req.cookie))
   }
 
   eventsSince(roomId: RoomId, playerId: PlayerId, seq: number): { events: ServerEvent[]; untilSeq: number } {
@@ -447,6 +481,14 @@ export class RoomManager {
       if (this.isTurnSeat(live, seat)) live.deadlineAt = Date.now() + AUTO_PLAY_MS
     }
     this.broadcast(live)
+    this.sweepWaitingLeaves(live, Date.now())
+  }
+
+  /** Guest (not host) leaves a waiting room: frees the seat / spectator slot. */
+  leave(playerId: PlayerId, roomId: RoomId): void {
+    const live = this.rooms.get(roomId)
+    if (!live) return
+    this.leaveGuest(live, playerId)
   }
 
   listenPort = (): number => this.ctx?.webServer?.port ?? 3080
@@ -719,6 +761,7 @@ export class RoomManager {
     }
     const live = this.rooms.get(roomId)
     live?.disconnectedAt.delete(playerId)
+    this.unclaimBrowser(playerId, roomId)
   }
 
   private async closeRoom(live: LiveRoom): Promise<void> {
@@ -731,6 +774,7 @@ export class RoomManager {
       }
     }
     live.room = { ...live.room, phase: 'closed' }
+    this.unclaimRoom(live.room.roomId)
   }
 
   private async settle(live: LiveRoom): Promise<void> {
@@ -876,6 +920,7 @@ export class RoomManager {
 
   private onTick(now: number): void {
     for (const live of this.rooms.values()) {
+      this.sweepWaitingLeaves(live, now)
       if (live.room.phase === 'dealing' && live.deadlineAt && now >= live.deadlineAt) {
         this.finishDeal(live)
         this.broadcast(live)
@@ -953,12 +998,12 @@ export class RoomManager {
 
   private turnMs(live: LiveRoom): number {
     const engine = live.engine
-    if (!engine) return this.config.turnTimeoutMs
+    if (!engine) return live.turnTimeoutMs
     const seat = live.room.phase === 'bidding' ? engine.bidTurn : engine.hand.turnSeat
-    return live.autoPlay.has(seat) ? AUTO_PLAY_MS : this.config.turnTimeoutMs
+    return live.autoPlay.has(seat) ? AUTO_PLAY_MS : live.turnTimeoutMs
   }
 
-  private previewOf(live: LiveRoom, sitOk: boolean): RoomPreview {
+  private previewOf(live: LiveRoom, sitOk: boolean, alreadyInRoom = false): RoomPreview {
     const empty = this.firstEmptySeat(live)
     const hostName = live.room.seats.find((seat) => seat.playerId === live.room.hostPlayerId)?.displayName
       ?? '房主'
@@ -978,8 +1023,9 @@ export class RoomManager {
         ready: seat.ready,
         host: seat.playerId === live.room.hostPlayerId,
       })),
-      canSit: sitOk && live.room.phase === 'waiting' && empty !== null,
+      canSit: sitOk && live.room.phase === 'waiting' && empty !== null && !alreadyInRoom,
       inviteExpiresAt: live.room.inviteExpiresAt,
+      alreadyInRoom,
     }
   }
 
@@ -1033,6 +1079,7 @@ export class RoomManager {
       deadlineAt: live.deadlineAt ? new Date(live.deadlineAt).toISOString() : null,
       yourAvailableAtoms: asTokenAtomString(this.ledger.getAvailable(playerId)),
       yourEscrowAtoms: asTokenAtomString(this.ledger.getEscrow(playerId)),
+      yourDouble: engine && seat !== null ? doubleAnswerOf(engine, seat) : null,
       legal,
       remainingRanks,
       chat: live.chat.slice(-20),
@@ -1127,6 +1174,70 @@ export class RoomManager {
 
   private emit(_live: LiveRoom, event: ServerEvent, playerId: PlayerId): void {
     for (const listener of this.listeners) listener(playerId, event)
+  }
+
+  private alreadyInRoom(live: LiveRoom, browserId: unknown, cookie: string | undefined): boolean {
+    const session = this.sessionByCookie(cookie)
+    if (session && session.roomId === live.room.roomId && this.playerInRoom(live, session.playerId)) {
+      return true
+    }
+    const id = sanitizeBrowserId(browserId)
+    if (!id) return false
+    const claimed = this.browserRooms.get(this.browserKey(id, live.room.roomId))
+    return Boolean(claimed && this.playerInRoom(live, claimed))
+  }
+
+  private playerInRoom(live: LiveRoom, playerId: PlayerId): boolean {
+    return this.seatOf(live, playerId) !== null || live.room.spectatorIds.includes(playerId)
+  }
+
+  private browserKey(browserId: string, roomId: RoomId): string {
+    return `${browserId}\n${roomId}`
+  }
+
+  private claimBrowser(browserId: string | null | undefined, roomId: RoomId, playerId: PlayerId): void {
+    const id = sanitizeBrowserId(browserId)
+    if (!id) return
+    this.browserRooms.set(this.browserKey(id, roomId), playerId)
+  }
+
+  private unclaimBrowser(playerId: PlayerId, roomId: RoomId): void {
+    for (const [key, claimed] of this.browserRooms) {
+      if (claimed === playerId && key.endsWith(`\n${roomId}`)) this.browserRooms.delete(key)
+    }
+  }
+
+  private unclaimRoom(roomId: RoomId): void {
+    for (const key of this.browserRooms.keys()) {
+      if (key.endsWith(`\n${roomId}`)) this.browserRooms.delete(key)
+    }
+  }
+
+  private leaveGuest(live: LiveRoom, playerId: PlayerId): void {
+    if (playerId === live.room.hostPlayerId) return
+    if (live.room.phase !== 'waiting') return
+    if (!this.playerInRoom(live, playerId)) return
+    this.stand(live, playerId)
+    live.room = { ...live.room, spectatorIds: live.room.spectatorIds.filter((id) => id !== playerId) }
+    this.emit(live, { type: 'left', seq: live.seq + 1, reason: 'disconnected' }, playerId)
+    this.dropSession(playerId, live.room.roomId)
+    this.broadcast(live)
+  }
+
+  private sweepWaitingLeaves(live: LiveRoom, now: number): void {
+    if (live.room.phase !== 'waiting') return
+    const grace = this.config.leaveWaitingMs
+    const ids = new Set<PlayerId>([
+      ...live.room.seats.map((seat) => seat.playerId).filter((id): id is PlayerId => Boolean(id)),
+      ...live.room.spectatorIds,
+    ])
+    for (const playerId of ids) {
+      if (playerId === live.room.hostPlayerId) continue
+      const disconnectedAt = live.disconnectedAt.get(playerId)
+      if (disconnectedAt === undefined) continue
+      if (now - disconnectedAt < grace) continue
+      this.leaveGuest(live, playerId)
+    }
   }
 }
 

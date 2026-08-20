@@ -8,7 +8,7 @@ const MAX_MULTIPLIER_OPTIONS = [8, 16, 32, 64] as const
 
 export function LobbyView({
   tab, onTab, title, stakeM, maxMultiplier, seatCount, laiZi, onTitle, onStake, onCap, onSeats, onLaiZi, onCreate, creating, error,
-  roomCode, sitUrl, watchUrl, shareable, welcomeAtoms, join,
+  roomCode, sitUrl, watchUrl, shareable, welcomeAtoms, turnTimeoutSec, join,
 }: {
   tab: 'create' | 'join'
   onTab: (tab: 'create' | 'join') => void
@@ -30,6 +30,7 @@ export function LobbyView({
   watchUrl: string
   shareable: boolean
   welcomeAtoms: bigint
+  turnTimeoutSec: number
   join: {
     code: string
     invite: string
@@ -70,7 +71,7 @@ export function LobbyView({
           ? (
             <>
               <h2>加入房间</h2>
-              <p className={css.hint}>别人开的房填房号就能进。积分记在开房那台机器上，不是 DeepSeek 平台余额。</p>
+              <p className={css.hint}>别人开的房填房号就能进，一直留在这个斗地主 tab。积分记在开房那台机器上，不是 DeepSeek 平台余额。</p>
               <JoinForm
                 code={join.code}
                 invite={join.invite}
@@ -128,7 +129,7 @@ export function LobbyView({
                 </label>
               </div>
               <p className={css.hint}>
-                {seatCount} 人{laiZi ? '癞子' : '经典'}。好友点准备，齐了由房主开打。后来的人观战。出牌 120 秒。入座冻结 {formatM(cap)}，欢迎 {formatM(welcomeAtoms)}。
+                {seatCount} 人{laiZi ? '癞子' : '经典'}。好友点准备，齐了由房主开打。后来的人观战。叫抢/出牌 {turnTimeoutSec} 秒。入座冻结 {formatM(cap)}，欢迎 {formatM(welcomeAtoms)}。
               </p>
               {blocked ? <p className={css.error}>欢迎积分不够入座冻结，把底注或封顶调低，或者去设置里加欢迎积分。</p> : null}
               <button type="button" className={css.primary} disabled={blocked || creating} onClick={onCreate}>

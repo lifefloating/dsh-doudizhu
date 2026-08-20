@@ -1,4 +1,5 @@
 import z from '@deepseek-ai/schemastery'
+import { LEAVE_WAITING_MS } from './invariant.ts'
 import { seatCapAtoms, STAKE_LADDER_M } from './settle/math.ts'
 
 export const STAKE_LADDER = STAKE_LADDER_M
@@ -6,7 +7,12 @@ export const DEFAULT_STAKE_M = 1
 export const DEFAULT_MAX_MULTIPLIER = 8
 export const DEFAULT_WELCOME_ATOMS = '200000000'
 export const DEFAULT_SEAT_COUNT = 3
-export const DEFAULT_TURN_TIMEOUT_MS = 120_000
+export const DEFAULT_TURN_TIMEOUT_SEC = 120
+export const MIN_TURN_TIMEOUT_SEC = 60
+export const MAX_TURN_TIMEOUT_SEC = 300
+export const DEFAULT_TURN_TIMEOUT_MS = DEFAULT_TURN_TIMEOUT_SEC * 1000
+export const MIN_TURN_TIMEOUT_MS = MIN_TURN_TIMEOUT_SEC * 1000
+export const MAX_TURN_TIMEOUT_MS = MAX_TURN_TIMEOUT_SEC * 1000
 export const MAX_MULTIPLIER_OPTIONS = [8, 16, 32, 64] as const
 export const SEAT_COUNT_OPTIONS = [3, 4] as const
 
@@ -32,6 +38,8 @@ export interface PluginConfig {
   routePrefix?: string
   /** Test-only. Not a settings field. */
   dealAnimMs?: number
+  /** Test-only. Not a settings field. */
+  leaveWaitingMs?: number
 }
 
 export const Config = z.object({
@@ -78,6 +86,7 @@ export interface ResolvedConfig {
   routePrefix: string
   /** Test-only override. Production uses `dealAnimationMs(seatCount)`. */
   dealAnimMs?: number
+  leaveWaitingMs: number
 }
 
 export function resolveConfig(config: PluginConfig): ResolvedConfig {
@@ -104,6 +113,7 @@ export function resolveConfig(config: PluginConfig): ResolvedConfig {
     retainClosedRoomsHours: config.retainClosedRoomsHours ?? 24,
     inviteTtlHours: config.inviteTtlHours ?? 24,
     routePrefix: normalizePrefix(config.routePrefix ?? '/doudizhu'),
+    leaveWaitingMs: config.leaveWaitingMs ?? LEAVE_WAITING_MS,
     ...(config.dealAnimMs !== undefined ? { dealAnimMs: config.dealAnimMs } : {}),
   }
 }
@@ -111,6 +121,22 @@ export function resolveConfig(config: PluginConfig): ResolvedConfig {
 export function parseWelcome(value: string): bigint {
   if (!/^\d+$/.test(value)) throw new Error('welcomeAtoms must be a non-negative decimal string')
   return BigInt(value)
+}
+
+/** Settings UI is seconds. Empty means the 120s default. Tests may still pass raw ms into RoomManager. */
+export function parseTurnTimeoutSec(raw: string): number {
+  const trimmed = raw.trim()
+  if (trimmed === '') return DEFAULT_TURN_TIMEOUT_SEC
+  if (!/^\d+$/.test(trimmed)) throw new Error('出牌计时必须是整数秒')
+  const seconds = Number(trimmed)
+  if (seconds < MIN_TURN_TIMEOUT_SEC || seconds > MAX_TURN_TIMEOUT_SEC) {
+    throw new Error(`出牌计时必须是 ${MIN_TURN_TIMEOUT_SEC} 到 ${MAX_TURN_TIMEOUT_SEC} 秒`)
+  }
+  return seconds
+}
+
+export function turnTimeoutSecFromMs(ms: number): number {
+  return Math.round(ms / 1000)
 }
 
 export function validatePublicBaseUrl(value: string): string {

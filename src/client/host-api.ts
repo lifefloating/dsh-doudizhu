@@ -1,4 +1,6 @@
 import type { ClientCommand, PlayerView, PublicSettlement, RoomPreview, ServerEvent } from '../types.ts'
+import { browserInstanceId } from './browser.ts'
+import { ALREADY_IN_ROOM_MESSAGE } from './presence.ts'
 
 const PREFIX = '/doudizhu'
 
@@ -35,9 +37,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
   const body = text ? JSON.parse(text) as T & { error?: string; message?: string } : {} as T
   if (!response.ok) {
-    throw new Error((body as { message?: string }).message ?? (body as { error?: string }).error ?? response.statusText)
+    const code = (body as { error?: string }).error
+    if (code === 'already-in-room') throw new Error(ALREADY_IN_ROOM_MESSAGE)
+    throw new Error((body as { message?: string }).message ?? code ?? response.statusText)
   }
   return body
+}
+
+function withBrowser(input: object): object {
+  const browserId = browserInstanceId()
+  return browserId ? { ...input, browserId } : input
+}
+
+export interface PluginReady {
+  ok: boolean
+  plugin: string
+  turnTimeoutMs?: number
+}
+
+export function fetchPluginReady() {
+  return request<PluginReady>('/api/ready')
 }
 
 export function createRoom(input: {
@@ -48,7 +67,7 @@ export function createRoom(input: {
   hostDisplayName?: string
   title?: string
 }) {
-  return request<CreateRoomResponse>('/api/rooms', { method: 'POST', body: JSON.stringify(input) })
+  return request<CreateRoomResponse>('/api/rooms', { method: 'POST', body: JSON.stringify(withBrowser(input)) })
 }
 
 export function peekRoom(input: { roomCode: string; invite: string }) {
@@ -56,11 +75,31 @@ export function peekRoom(input: { roomCode: string; invite: string }) {
     code: input.roomCode,
     invite: input.invite,
   })
+  const browserId = browserInstanceId()
+  if (browserId) query.set('browser', browserId)
   return request<RoomPreview>(`/api/preview?${query.toString()}`)
 }
 
 export function joinRoom(input: { roomCode: string; invite: string; displayName: string; role: 'sit' | 'watch' }) {
-  return request<JoinResponse>('/api/join', { method: 'POST', body: JSON.stringify(input) })
+  return request<JoinResponse>('/api/join', { method: 'POST', body: JSON.stringify(withBrowser(input)) })
+}
+
+/** Fire-and-forget so tab close / overlay unmount still reaches the host. */
+export function leaveHere(): void {
+  try {
+    void fetch(`${PREFIX}/api/leave`, {
+      method: 'POST',
+      keepalive: true,
+      credentials: 'same-origin',
+      headers: {
+        'content-type': 'application/json',
+        'x-requested-with': 'doudizhu',
+      },
+      body: '{}',
+    })
+  } catch {
+    /* unloading */
+  }
 }
 
 export function sendCommand(roomId: string, command: ClientCommand) {
@@ -108,7 +147,15 @@ export function connectChannel(
     poll = setInterval(() => {
       void fetchSince(fallback.roomId, fallback.seq()).then((body) => {
         for (const event of body.events) onEvent(event)
-      }).catch(() => { /* keep polling */ })
+      }).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : ''
+        if (message === 'not in this room' || message === 'not joined') {
+          onEvent({ type: 'left', seq: 0, reason: 'disconnected' })
+          closed = true
+          if (poll) clearInterval(poll)
+          poll = undefined
+        }
+      })
     }, 800)
   }
   return () => {

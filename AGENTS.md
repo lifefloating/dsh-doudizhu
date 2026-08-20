@@ -2,7 +2,7 @@
 
 这是 DeepSeek Harness 的第三方斗地主插件，不是 Harness 本体。别去改旁边的 `deepseek-harness` checkout。用法见 [README.md](README.md)。
 
-Host 进程是权威房间和账本。`#/doudizhu` 只给房主本机 overlay。好友走 `/doudizhu/join`，不要启动官方 SPA。桌上的分是本机欢迎账本，不是 DeepSeek 余额，也别碰 API key。
+Host 进程是权威房间和账本。对局只在 DSH 的 `#/doudizhu` tab 里进行，点侧栏 dsh-poker 不要跳到独立页。`/doudizhu/join` 只做邀请门槛：没有 DSH 或没装本插件就提示安装；两项都有后等用户点按钮再进 tab。桌上的分是本机欢迎账本，不是 DeepSeek 余额，也别碰 API key。
 
 ## 目录
 
@@ -15,7 +15,7 @@ src/net/              HTTP / WS / 加入页
 src/settle/           账本、冻结、结算
 src/persist/          存储 schema
 src/client/           房主 overlay（factory-CJS）
-src/join/             好友加入页（独立 IIFE）
+src/join/             邀请门槛页（独立 IIFE，不打牌）
 types/shims/*.ts      给 typecheck 用的手写桩，不是真实运行时
 scripts/              从官方复制的 client bundle 预设
 lib/                  构建产物，不提交
@@ -51,7 +51,8 @@ dsh plugin --profile web add link:/绝对路径/dsh-doudizhu
 - `dsh.client.inject` 只给预检看，不要变成值导入。`ui-settings` 只能 `import type`。
 - 读 `ctx.settingsScope` 之前，`inject` 里必须有 `settingsScope`。`sidebar.footer.action` / `shell.overlay` 用 `id`，`settings.plugin.item` 用 `key`。
 - 平台模块（react、cordis、ui-slots、ui-primitives 等）当 external，名单在 `scripts/web-platform.ts`。
-- 叫人只发 `/doudizhu/join?code=&invite=`。没配 `publicBaseUrl` 就不要假装能分享。
+- 叫人只发 `/doudizhu/join?code=&invite=`。那页会检测 DSH + 插件，通过后等用户点「进入」再进 `#/doudizhu`，不要自动跳。没配 `publicBaseUrl` 就不要假装能分享。
+- 准备阶段关掉页面要让出席位；同一个浏览器身份不能占两个座位。
 - 设置页改的是下次开房的默认值，已经开着的房间不要跟着变。
 
 ## 测试

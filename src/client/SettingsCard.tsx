@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import type { PluginConfig } from '../config.ts'
+import {
+  DEFAULT_TURN_TIMEOUT_MS, DEFAULT_TURN_TIMEOUT_SEC, MAX_TURN_TIMEOUT_SEC, MIN_TURN_TIMEOUT_SEC,
+  parseTurnTimeoutSec, turnTimeoutSecFromMs, type PluginConfig,
+} from '../config.ts'
 import css from './styles.module.css'
 
 interface SettingsDraft {
@@ -10,6 +13,7 @@ interface SettingsDraft {
   defaultMaxMultiplier: number
   defaultLaiZi: boolean
   spectatorCardCounter: boolean
+  turnTimeoutSec: string
 }
 
 function draftFrom(value: PluginConfig): SettingsDraft {
@@ -20,6 +24,7 @@ function draftFrom(value: PluginConfig): SettingsDraft {
     defaultMaxMultiplier: value.defaultMaxMultiplier ?? 8,
     defaultLaiZi: value.defaultLaiZi === true,
     spectatorCardCounter: value.spectatorCardCounter === true,
+    turnTimeoutSec: String(turnTimeoutSecFromMs(value.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS)),
   }
 }
 
@@ -30,6 +35,7 @@ function draftsEqual(left: SettingsDraft, right: SettingsDraft): boolean {
     && left.defaultMaxMultiplier === right.defaultMaxMultiplier
     && left.defaultLaiZi === right.defaultLaiZi
     && left.spectatorCardCounter === right.spectatorCardCounter
+    && left.turnTimeoutSec === right.turnTimeoutSec
 }
 
 function validateDraft(draft: SettingsDraft): string | null {
@@ -50,6 +56,11 @@ function validateDraft(draft: SettingsDraft): string | null {
   }
   if (!/^\d+$/.test(draft.welcomeAtoms)) return '欢迎积分必须是非负整数'
   if (![8, 16, 32, 64].includes(draft.defaultMaxMultiplier)) return '倍数封顶只能是 8、16、32 或 64'
+  try {
+    parseTurnTimeoutSec(draft.turnTimeoutSec)
+  } catch (cause) {
+    return cause instanceof Error ? cause.message : '出牌计时无效'
+  }
   return null
 }
 
@@ -97,9 +108,11 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
       setError(invalid)
       return
     }
+    const timeoutSec = parseTurnTimeoutSec(draft.turnTimeoutSec)
     const next: SettingsDraft = {
       ...draft,
       publicBaseUrl: draft.publicBaseUrl.trim().replace(/\/+$/, ''),
+      turnTimeoutSec: String(timeoutSec),
     }
     setDraft(next)
     setSaving(true)
@@ -116,6 +129,10 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
       for (const [field, fieldValue] of writes) {
         if (stored[field] === fieldValue) continue
         await scope.set(String(field), fieldValue)
+      }
+      const timeoutMs = timeoutSec * 1000
+      if ((value.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS) !== timeoutMs) {
+        await scope.set('turnTimeoutMs', timeoutMs)
       }
       setSaved(true)
     } catch (cause) {
@@ -150,7 +167,7 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
       {open
         ? (
           <div className={css.settingsBody}>
-            <p className={css.settingsHint}>开房在侧栏 New Session 下面的「斗地主」，这里只改下次开房的默认值。点保存后生效，已经开着的房间不动。</p>
+            <p className={css.settingsHint}>开房在侧栏 New Session 下面的 dsh-poker，这里只改下次开房的默认值。点保存后生效，已经开着的房间不动。</p>
             <label className={css.settingsField}>
               <span className={css.settingsLabel}>对外地址 publicBaseUrl</span>
               <input
@@ -191,6 +208,19 @@ export function SettingsCard({ scope }: { scope: SettingsScope<PluginConfig> }) 
                 value={String(draft.defaultMaxMultiplier)}
                 onChange={(event) => { patch('defaultMaxMultiplier', Number(event.target.value)) }}
               />
+            </label>
+            <label className={css.settingsField}>
+              <span className={css.settingsLabel}>出牌计时（秒）</span>
+              <input
+                className={css.settingsInput}
+                inputMode="numeric"
+                value={draft.turnTimeoutSec}
+                placeholder={String(DEFAULT_TURN_TIMEOUT_SEC)}
+                onChange={(event) => { patch('turnTimeoutSec', event.target.value) }}
+              />
+              <p className={css.settingsFieldHint}>
+                叫抢和出牌共用。空着按 {DEFAULT_TURN_TIMEOUT_SEC} 秒。最少 {MIN_TURN_TIMEOUT_SEC} 秒，最多 {MAX_TURN_TIMEOUT_SEC} 秒（5 分钟）。下次开房生效。
+              </p>
             </label>
             <div className={css.settingsField}>
               <div className={css.settingsSwitchRow}>

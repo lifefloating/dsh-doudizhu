@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PluginConfig } from '../config.ts'
+import { doudizhuTabHash, parseDoudizhuHash } from './hash.ts'
 import { HostApp } from './HostApp.tsx'
 import { SettingsCard } from './SettingsCard.tsx'
 import css from './styles.module.css'
@@ -64,15 +65,25 @@ function DouDizhuSidebarButton({ wide }: { wide?: boolean }) {
 
   if (!mount) return null
   return createPortal(
+    <DouDizhuSidebarControl wide={wide === true} />,
+    mount,
+  )
+}
+
+function DouDizhuSidebarControl({ wide }: { wide: boolean }) {
+  const [open, setOpen] = useState(() => parseDoudizhuHash(location.hash).open)
+  useHashOpen(setOpen)
+  return (
     <button
       type="button"
-      className={`${css.sidebarBtn} ${wide ? '' : css.sidebarBtnRail}`}
-      onClick={() => { location.hash = '#/doudizhu' }}
+      className={`${css.sidebarBtn} ${wide ? '' : css.sidebarBtnRail} ${open ? css.sidebarBtnActive : ''}`}
+      aria-current={open ? 'page' : undefined}
+      onClick={() => {
+        if (!parseDoudizhuHash(location.hash).open) location.hash = doudizhuTabHash()
+      }}
     >
-      <span>{wide ? '斗地主' : '斗'}</span>
-      {wide ? <span className={css.muted}>dsh-poker</span> : null}
-    </button>,
-    mount,
+      <span>{wide ? 'dsh-poker' : 'dsh'}</span>
+    </button>
   )
 }
 
@@ -99,16 +110,46 @@ function findNewSessionAnchor(): HTMLElement | null {
 }
 
 function DouDizhuOverlay() {
-  const [open, setOpen] = useState(() => location.hash.startsWith('#/doudizhu'))
+  const [open, setOpen] = useState(() => parseDoudizhuHash(location.hash).open)
+  const inset = useCenterColumnInset(open)
   useHashOpen(setOpen)
   if (!open) return null
-  return <HostApp onClose={() => { location.hash = '#/' }} />
+  return (
+    <div className={css.tabShell} style={{ left: inset.left, right: inset.right }} data-doudizhu-tab="">
+      <HostApp onClose={() => { location.hash = '#/' }} />
+    </div>
+  )
 }
 
 function useHashOpen(setOpen: (open: boolean) => void): void {
   useEffect(() => {
-    const sync = (): void => { setOpen(location.hash.startsWith('#/doudizhu')) }
+    const sync = (): void => { setOpen(parseDoudizhuHash(location.hash).open) }
     window.addEventListener('hashchange', sync)
     return () => { window.removeEventListener('hashchange', sync) }
   }, [setOpen])
+}
+
+/** Keep the game in the DSH center column so the sidebar stays the 斗地主 tab chrome. */
+function useCenterColumnInset(active: boolean): { left: number; right: number } {
+  const [inset, setInset] = useState({ left: 0, right: 0 })
+  useLayoutEffect(() => {
+    if (!active) return
+    const overlay = document.querySelector('[data-shell-overlay]')
+    const frame = overlay?.parentElement
+    const sidebar = frame?.firstElementChild
+    const details = overlay?.previousElementSibling
+    if (!(sidebar instanceof HTMLElement)) return
+    const update = (): void => {
+      setInset({
+        left: sidebar.getBoundingClientRect().width,
+        right: details instanceof HTMLElement ? details.getBoundingClientRect().width : 0,
+      })
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(sidebar)
+    if (details instanceof HTMLElement) observer.observe(details)
+    return () => { observer.disconnect() }
+  }, [active])
+  return inset
 }

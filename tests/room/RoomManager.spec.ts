@@ -35,6 +35,36 @@ describe('RoomManager', () => {
     await manager.dispose()
   })
 
+  it('freezes turn timeout on the room so later settings do not move it', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0, turnTimeoutMs: 2_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    manager.replaceConfig({ dealAnimMs: 0, turnTimeoutMs: 8_000 })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const started = manager.view(host.roomId, host.hostPlayerId)
+    expect(started.room.phase).toBe('bidding')
+    const remain = Date.parse(started.deadlineAt!) - Date.now()
+    expect(remain).toBeGreaterThan(1_500)
+    expect(remain).toBeLessThanOrEqual(2_000)
+
+    const later = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '新房' })
+    const laterInvite = new URL(later.sitUrl).searchParams.get('invite') ?? ''
+    const c = await manager.join({ roomCode: later.roomCode, invite: laterInvite, displayName: '南', role: 'sit' })
+    const d = await manager.join({ roomCode: later.roomCode, invite: laterInvite, displayName: '西', role: 'sit' })
+    await manager.command(c.roomId, c.playerId, { type: 'ready', ready: true })
+    await manager.command(d.roomId, d.playerId, { type: 'ready', ready: true })
+    await manager.command(later.roomId, later.hostPlayerId, { type: 'start' }, true)
+    const next = manager.view(later.roomId, later.hostPlayerId)
+    const nextRemain = Date.parse(next.deadlineAt!) - Date.now()
+    expect(nextRemain).toBeGreaterThan(7_500)
+    expect(nextRemain).toBeLessThanOrEqual(8_000)
+    await manager.dispose()
+  })
+
   it('does not fill empty seats with bots', async () => {
     const manager = new RoomManager(null, {}, null)
     const created = await manager.createRoom({ stakeM: 1, maxMultiplier: 8 })
@@ -63,6 +93,7 @@ describe('RoomManager', () => {
     expect(preview.title).toBe('好友局')
     expect(preview.canSit).toBe(true)
     expect(preview.seated).toBe(1)
+    expect(preview.alreadyInRoom).toBe(false)
     await expect(manager.peek({ roomCode: host.roomCode, invite: 'nope' })).rejects.toThrow(/auth|invite/)
     const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
     expect(a.seat).toBe(1)
@@ -317,6 +348,41 @@ describe('RoomManager', () => {
     await manager.dispose()
   })
 
+  it('reports the local double answer without waiting for the rest of the table', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const players = [
+      { playerId: host.hostPlayerId, seat: 0 as const },
+      { playerId: a.playerId, seat: a.seat! },
+      { playerId: b.playerId, seat: b.seat! },
+    ]
+    const first = manager.view(host.roomId, host.hostPlayerId)
+    const caller = players.find((player) => player.seat === first.turnSeat)!
+    await manager.command(host.roomId, caller.playerId, { type: 'bid', action: 'call' })
+    for (let i = 0; i < 4; i += 1) {
+      const view = manager.view(host.roomId, host.hostPlayerId)
+      if (view.room.phase !== 'bidding') break
+      const next = players.find((player) => player.seat === view.turnSeat)
+      await manager.command(host.roomId, next!.playerId, { type: 'bid', action: 'pass' })
+    }
+    const before = manager.view(host.roomId, a.playerId)
+    expect(before.room.phase).toBe('doubling')
+    expect(before.yourDouble).toBeNull()
+    await manager.command(a.roomId, a.playerId, { type: 'double', action: 'double' })
+    const answered = manager.view(host.roomId, a.playerId)
+    const waiting = manager.view(host.roomId, b.playerId)
+    expect(answered.room.phase).toBe('doubling')
+    expect(answered.yourDouble).toBe('double')
+    expect(waiting.yourDouble).toBeNull()
+    await manager.dispose()
+  })
+
   it('records pre-deal ming pai as ×5 and gives that seat first call', async () => {
     const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
     const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
@@ -347,6 +413,145 @@ describe('RoomManager', () => {
     expect(manager.view(host.roomId, host.hostPlayerId).room.phase).toBe('dealing')
     await manager.command(host.roomId, a.playerId, { type: 'mingPai' })
     expect(manager.view(host.roomId, a.playerId).mingPaiBySeat[a.seat!]).toBe(true)
+    await manager.dispose()
+  })
+
+  it('frees a waiting seat when a guest disconnects, ready or not', async () => {
+    const manager = new RoomManager(null, { leaveWaitingMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    expect(a.seat).toBe(1)
+    manager.markDisconnected(a.playerId, host.roomId)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.playerId).toBeNull()
+
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    expect(b.seat).toBe(1)
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.ready).toBe(true)
+    manager.markDisconnected(b.playerId, host.roomId)
+    const after = manager.view(host.roomId, host.hostPlayerId)
+    expect(after.room.seats[1]?.playerId).toBeNull()
+    expect(after.room.seats[1]?.ready).toBe(false)
+    await manager.dispose()
+  })
+
+  it('keeps a disconnected guest through the grace window if they reconnect', async () => {
+    const manager = new RoomManager(null, { leaveWaitingMs: 5_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const t0 = Date.now()
+    manager.markDisconnected(a.playerId, host.roomId)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.playerId).toBe(a.playerId)
+    manager.markConnected(a.playerId, host.roomId, true)
+    manager.tickForTest(t0 + 6_000)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.playerId).toBe(a.playerId)
+    await manager.dispose()
+  })
+
+  it('does not free the host seat or an in-hand seat on disconnect', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0, leaveWaitingMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    manager.markDisconnected(host.hostPlayerId, host.roomId)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[0]?.playerId).toBe(host.hostPlayerId)
+
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    manager.markDisconnected(a.playerId, host.roomId)
+    const view = manager.view(host.roomId, host.hostPlayerId)
+    expect(view.room.phase).toBe('bidding')
+    expect(view.room.seats[a.seat!]?.playerId).toBe(a.playerId)
+    expect(view.room.seats[a.seat!]?.connected).toBe(false)
+    await manager.dispose()
+  })
+
+  it('drops a waiting spectator after disconnect', async () => {
+    const manager = new RoomManager(null, { leaveWaitingMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const watcher = await manager.join({
+      roomCode: host.roomCode, invite, displayName: '北', role: 'watch',
+    })
+    expect(watcher.seat).toBeNull()
+    expect(manager.view(host.roomId, host.hostPlayerId).room.spectatorIds).toContain(watcher.playerId)
+    manager.markDisconnected(watcher.playerId, host.roomId)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.spectatorIds).not.toContain(watcher.playerId)
+    await manager.dispose()
+  })
+
+  it('treats the same browser id as one person already in the room', async () => {
+    const manager = new RoomManager(null, {}, null)
+    const host = await manager.createRoom({
+      stakeM: 1, maxMultiplier: 8, hostDisplayName: '东', browserId: 'hostxxxx1',
+    })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    await expect(manager.join({
+      roomCode: host.roomCode, invite, displayName: '冒牌房主', role: 'sit', browserId: 'hostxxxx1',
+    })).rejects.toThrow(/already in this room/)
+
+    const a = await manager.join({
+      roomCode: host.roomCode, invite, displayName: '南', role: 'sit', browserId: 'guestxxx1',
+    })
+    expect(a.seat).toBe(1)
+    await expect(manager.join({
+      roomCode: host.roomCode, invite, displayName: '南2', role: 'sit', browserId: 'guestxxx1',
+    })).rejects.toThrow(/already in this room/)
+    await expect(manager.join({
+      roomCode: host.roomCode, invite, displayName: '南3', role: 'sit', cookie: a.cookie,
+    })).rejects.toThrow(/already in this room/)
+
+    const preview = await manager.peek({ roomCode: host.roomCode, invite, browserId: 'guestxxx1' })
+    expect(preview.alreadyInRoom).toBe(true)
+    expect(preview.canSit).toBe(false)
+
+    const other = await manager.join({
+      roomCode: host.roomCode, invite, displayName: '西', role: 'sit', browserId: 'guestxxx2',
+    })
+    expect(other.seat).toBe(2)
+    expect(other.playerId).not.toBe(a.playerId)
+    await manager.dispose()
+  })
+
+  it('allows the same browser to sit again after leaving', async () => {
+    const manager = new RoomManager(null, { leaveWaitingMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({
+      roomCode: host.roomCode, invite, displayName: '南', role: 'sit', browserId: 'guestxxx1',
+    })
+    manager.leave(a.playerId, host.roomId)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.playerId).toBeNull()
+    const again = await manager.join({
+      roomCode: host.roomCode, invite, displayName: '南', role: 'sit', browserId: 'guestxxx1',
+    })
+    expect(again.seat).toBe(1)
+    expect(again.playerId).not.toBe(a.playerId)
+    await manager.dispose()
+  })
+
+  it('rejects a second in-flight join from the same browser', async () => {
+    const manager = new RoomManager(null, {}, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const first = manager.join({
+      roomCode: host.roomCode, invite, displayName: '南', role: 'sit', browserId: 'racexxxx1',
+    })
+    const second = manager.join({
+      roomCode: host.roomCode, invite, displayName: '南2', role: 'sit', browserId: 'racexxxx1',
+    })
+    const settled = await Promise.allSettled([first, second])
+    const ok = settled.filter((item) => item.status === 'fulfilled')
+    const bad = settled.filter((item) => item.status === 'rejected')
+    expect(ok).toHaveLength(1)
+    expect(bad).toHaveLength(1)
+    expect((bad[0] as PromiseRejectedResult).reason).toMatchObject({ message: expect.stringMatching(/already in this room/) })
+    const view = manager.view(host.roomId, host.hostPlayerId)
+    expect(view.room.seats.filter((seat) => seat.playerId).length).toBe(2)
     await manager.dispose()
   })
 })

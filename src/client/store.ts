@@ -30,6 +30,12 @@ export function toggleCard(selected: CardId[], card: CardId): CardId[] {
   return selected.includes(card) ? selected.filter((item) => item !== card) : [...selected, card]
 }
 
+export function retainSelected(prev: CardId[], cards: readonly CardId[]): CardId[] {
+  const next = prev.filter((card) => cards.includes(card))
+  if (next.length === prev.length && next.every((card, index) => card === prev[index])) return prev
+  return next
+}
+
 export function selectionLegal(view: PlayerView | null, selected: CardId[]): boolean {
   if (!view || selected.length === 0) return false
   const key = [...selected].sort().join(',')

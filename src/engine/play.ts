@@ -194,6 +194,24 @@ export function applyDouble(
   return { ok: true, play: dummyPlay(seat), emptied: false }
 }
 
+export function doubleAnswerOf(state: EngineState, seat: Seat): DoubleAction | null {
+  if (state.phase !== 'doubling') return null
+  const landlord = state.hand.landlordSeat
+  if (landlord === null) return null
+  if (seat === landlord) {
+    if (!state.landlordDoubleDone) return null
+    return factorToDoubleAction(state.hand.landlordReDouble)
+  }
+  if (!state.farmerDoubleDone[seat]) return null
+  return factorToDoubleAction(state.hand.farmerDoubledBySeat[seat] ?? 1)
+}
+
+function factorToDoubleAction(factor: number): DoubleAction {
+  if (factor >= 4) return 'reDouble'
+  if (factor >= 2) return 'double'
+  return 'pass'
+}
+
 export function expireDoubling(state: EngineState, now = Date.now()): void {
   if (state.phase !== 'doubling') return
   if (now >= state.doubleDeadlineAt) finishDoubling(state)

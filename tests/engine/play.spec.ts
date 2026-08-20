@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { asCardId, asRoomId, type CardId } from '../../src/types.ts'
-import { applyBid, applyMingPai, applyPass, applyPlay, autoTimeout, createHand, type EngineState } from '../../src/engine/play.ts'
+import { applyBid, applyDouble, applyMingPai, applyPass, applyPlay, autoTimeout, createHand, doubleAnswerOf, type EngineState } from '../../src/engine/play.ts'
 
 function forceHands(state: EngineState, hands: [CardId[], CardId[], CardId[]]): void {
   state.phase = 'playing'
@@ -142,6 +142,25 @@ describe('play engine', () => {
     expect(state.hand.mingPaiMult).toBe(3)
     expect(applyMingPai(state, 1).ok).toBe(true)
     expect(state.hand.mingPaiMult).toBe(3)
+  })
+
+  it('keeps doubling until every seat has answered, then starts play', () => {
+    const state = createHand(asRoomId('rm_double'), 0, 1)
+    expect(applyBid(state, 0, 'pass').ok).toBe(true)
+    expect(applyBid(state, 1, 'pass').ok).toBe(true)
+    expect(applyBid(state, 2, 'call').ok).toBe(true)
+    expect(state.phase).toBe('doubling')
+    expect(state.hand.landlordSeat).toBe(2)
+    expect(doubleAnswerOf(state, 0)).toBeNull()
+    expect(applyDouble(state, 0, 'double').ok).toBe(true)
+    expect(doubleAnswerOf(state, 0)).toBe('double')
+    expect(state.phase).toBe('doubling')
+    expect(applyDouble(state, 1, 'pass').ok).toBe(true)
+    expect(doubleAnswerOf(state, 1)).toBe('pass')
+    expect(state.phase).toBe('doubling')
+    expect(applyDouble(state, 2, 'reDouble').ok).toBe(true)
+    expect(state.phase).toBe('playing')
+    expect(doubleAnswerOf(state, 2)).toBeNull()
   })
 
   it('landlord can ming pai after taking the bottom, farmers cannot', () => {

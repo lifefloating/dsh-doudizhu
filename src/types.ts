@@ -26,7 +26,7 @@ export type AuctionKind = 'call' | 'rob'
 
 export type RejectCode =
   | 'illegal' | 'not-your-turn' | 'phase' | 'auth' | 'duplicate-nonce'
-  | 'insufficient' | 'room-full' | 'expired'
+  | 'insufficient' | 'room-full' | 'expired' | 'already-in-room'
 
 export interface Player {
   readonly playerId: PlayerId
@@ -126,6 +126,7 @@ export interface PlayerView {
   readonly deadlineAt: string | null
   readonly yourAvailableAtoms: TokenAtomString
   readonly yourEscrowAtoms: TokenAtomString
+  readonly yourDouble: DoubleAction | null
   readonly legal: { readonly canPass: boolean; readonly combos: readonly LegalCombo[] }
   readonly remainingRanks: Readonly<Record<string, number>> | null
   readonly chat: readonly ChatLine[]
@@ -190,6 +191,8 @@ export interface RoomPreview {
   readonly seats: readonly RoomPreviewSeat[]
   readonly canSit: boolean
   readonly inviteExpiresAt: string
+  /** Same browser / cookie is already seated or watching this room. */
+  readonly alreadyInRoom: boolean
 }
 
 export type ClientCommand =
@@ -214,6 +217,7 @@ export type ServerEvent =
   | { type: 'reject'; nonce?: string; code: RejectCode; reason: string }
   | { type: 'settled'; seq: number; settlement: PublicSettlement }
   | { type: 'kicked'; seq: number; reason: string }
+  | { type: 'left'; seq: number; reason: string }
   | { type: 'pong'; ts: number }
 
 export class CommandError extends Error {

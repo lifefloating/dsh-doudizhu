@@ -73,7 +73,13 @@ async function handleApi(
   if (req.method === 'POST' && path === '/api/join') {
     assertOrigin(req, config.publicBaseUrl)
     assertMutatingHeaders(req)
-    const body = await readJson<{ roomCode: string; invite: string; displayName: string; role: 'sit' | 'watch' }>(req)
+    const body = await readJson<{
+      roomCode: string
+      invite: string
+      displayName: string
+      role: 'sit' | 'watch'
+      browserId?: string
+    }>(req)
     const loopback = isLoopbackHost(header(req, 'host'), req.socket.remoteAddress)
     const result = await manager.join({
       roomCode: String(body.roomCode ?? ''),
@@ -81,6 +87,8 @@ async function handleApi(
       displayName: String(body.displayName ?? ''),
       role: body.role === 'watch' ? 'watch' : 'sit',
       local: loopback,
+      ...(body.browserId ? { browserId: String(body.browserId) } : {}),
+      ...(cookies.ddz_seat ? { cookie: cookies.ddz_seat } : {}),
     })
     json(res, 200, {
       playerId: result.playerId,
@@ -106,6 +114,7 @@ async function handleApi(
       laiZi?: boolean
       hostDisplayName?: string
       title?: string
+      browserId?: string
     }>(req)
     try {
       const created = await manager.createRoom({
@@ -115,6 +124,7 @@ async function handleApi(
         laiZi: body.laiZi === true,
         ...(body.hostDisplayName ? { hostDisplayName: body.hostDisplayName } : {}),
         ...(body.title ? { title: body.title } : {}),
+        ...(body.browserId ? { browserId: String(body.browserId) } : {}),
       }, cookies.ddz_host)
       json(res, 200, {
         roomId: created.roomId,
@@ -139,14 +149,35 @@ async function handleApi(
     return
   }
 
+  if (req.method === 'GET' && path === '/api/ready') {
+    json(res, 200, {
+      ok: true,
+      plugin: 'dsh-poker',
+      turnTimeoutMs: config.turnTimeoutMs,
+    })
+    return
+  }
+
   if (req.method === 'GET' && path === '/api/preview') {
     const loopback = isLoopbackHost(header(req, 'host'), req.socket.remoteAddress)
+    const browserId = url.searchParams.get('browser') ?? ''
     const preview = await manager.peek({
       roomCode: String(url.searchParams.get('code') ?? ''),
       invite: String(url.searchParams.get('invite') ?? ''),
       local: loopback,
+      ...(browserId ? { browserId } : {}),
+      ...(cookies.ddz_seat ? { cookie: cookies.ddz_seat } : {}),
     })
     json(res, 200, preview)
+    return
+  }
+
+  if (req.method === 'POST' && path === '/api/leave') {
+    assertOrigin(req, config.publicBaseUrl)
+    assertMutatingHeaders(req)
+    const session = manager.sessionByCookie(cookies.ddz_seat)
+    if (session) manager.leave(session.playerId, session.roomId)
+    json(res, 200, { ok: true })
     return
   }
 
@@ -280,6 +311,6 @@ function writeError(res: ServerResponse, error: unknown): void {
 function statusFrom(error: { code?: RejectCode }): number {
   if (error.code === 'auth') return 403
   if (error.code === 'expired') return 404
-  if (error.code === 'room-full' || error.code === 'insufficient' || error.code === 'phase' || error.code === 'duplicate-nonce') return 409
+  if (error.code === 'room-full' || error.code === 'insufficient' || error.code === 'phase' || error.code === 'duplicate-nonce' || error.code === 'already-in-room') return 409
   return 400
 }
