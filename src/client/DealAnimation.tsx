@@ -5,15 +5,15 @@ import { dealtHandSize, type Seat } from '../types.ts'
 import { dealOrder, dealSeatTargets } from './seat-layout.ts'
 import css from './styles.module.css'
 
-const CARD_BACK = '/doudizhu/assets/card-back.png'
+const CARD_BACK = '/doudizhu/assets/card-back.webp'
 const PRELOAD = [
   CARD_BACK,
-  '/doudizhu/assets/face-a.png',
-  '/doudizhu/assets/face-j.png',
-  '/doudizhu/assets/face-k.png',
-  '/doudizhu/assets/face-q.png',
-  '/doudizhu/assets/joker-red.png',
-  '/doudizhu/assets/joker-black.png',
+  '/doudizhu/assets/face-a.webp',
+  '/doudizhu/assets/face-j.webp',
+  '/doudizhu/assets/face-k.webp',
+  '/doudizhu/assets/face-q.webp',
+  '/doudizhu/assets/joker-red.webp',
+  '/doudizhu/assets/joker-black.webp',
 ]
 
 interface Flight {

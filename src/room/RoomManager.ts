@@ -422,7 +422,7 @@ export class RoomManager {
           break
         case 'play':
           this.clearAutoPlay(live, playerId)
-          this.play(live, playerId, command.cards)
+          await this.play(live, playerId, command.cards)
           break
         case 'pass':
           this.clearAutoPlay(live, playerId)
@@ -441,7 +441,7 @@ export class RoomManager {
         case 'hostClose':
           if (!isHost && live.room.hostPlayerId !== playerId) throw fail('auth', 'host only')
           await this.closeRoom(live)
-          break
+          return { seq: live.seq }
         case 'ping':
           this.emit(live, { type: 'pong', ts: Date.now() }, playerId)
           return { seq: live.seq }
@@ -498,6 +498,30 @@ export class RoomManager {
     this.onTick(now)
   }
 
+  /** Test hook: leave one card on `winnerSeat` so the next play ends the hand. */
+  armLastCardForTest(roomId: RoomId, winnerSeat: Seat, landlordSeat: Seat): CardId {
+    const live = this.requireRoom(roomId)
+    const engine = live.engine
+    if (!engine) throw new Error('no engine')
+    const winnerHand = engine.hand.hands[winnerSeat]
+    const last = winnerHand?.[winnerHand.length - 1]
+    if (!last) throw new Error('winner has no cards')
+    engine.phase = 'playing'
+    engine.hand.landlordSeat = landlordSeat
+    engine.hand.bid = engine.hand.bid > 0 ? engine.hand.bid : 1
+    engine.hand.hands[winnerSeat] = [last]
+    engine.hand.turnSeat = winnerSeat
+    engine.hand.leadSeat = winnerSeat
+    engine.hand.table = []
+    engine.passesInRow = 0
+    engine.firstLeadSeq = 1
+    engine.successfulLandlordPlaysAfterLead = winnerSeat === landlordSeat ? 0 : 1
+    engine.farmerPlayed = engine.farmerPlayed.map(() => true)
+    live.room = { ...live.room, phase: 'playing' }
+    live.deadlineAt = Date.now() + this.turnMs(live)
+    return last
+  }
+
   private async hydrate(storage: unknown): Promise<void> {
     const opened = await openDoudizhuDomain(storage)
     if (!opened) return
@@ -545,10 +569,7 @@ export class RoomManager {
     const grant = issueHostGrant(playerId, live.room.roomId, cap)
     await persistGrant(this.domain, grant)
     const host = live.room.hostPlayerId === playerId
-    if (this.ledger.getEscrow(playerId) < cap) {
-      if (this.ledger.getAvailable(playerId) < cap) throw fail('insufficient', 'need more welcome atoms')
-      await this.ledger.freeze(playerId, cap, live.room.roomId)
-    }
+    await this.ensureSeatCap(live, playerId)
     const seats = live.room.seats.map((item) => item.seat === seat
       ? {
           ...item,
@@ -587,11 +608,7 @@ export class RoomManager {
     const seat = this.seatOf(live, playerId)
     if (seat === null) throw fail('illegal', 'not seated')
     if (live.room.hostPlayerId === playerId) throw fail('illegal', 'host starts the hand')
-    if (ready) {
-      const cap = seatCapAtoms(live.room.stakeAtoms, live.room.maxMultiplier, live.room.seatCount)
-      if (this.ledger.getAvailable(playerId) < cap) throw fail('insufficient', 'need more welcome atoms')
-      if (this.ledger.getEscrow(playerId) < cap) await this.ledger.freeze(playerId, cap, live.room.roomId)
-    }
+    if (ready) await this.ensureSeatCap(live, playerId)
     this.patchSeat(live, seat, { ready })
   }
 
@@ -603,10 +620,14 @@ export class RoomManager {
     if (!seated.every((seat) => seat.playerId === live.room.hostPlayerId || seat.ready)) {
       throw fail('phase', 'guests are not ready')
     }
+    for (const seat of seated) {
+      if (seat.playerId) await this.ensureSeatCap(live, seat.playerId)
+    }
     this.beginDeal(live, live.lastLandlordSeat === null ? null : nextSeat(live.lastLandlordSeat, live.room.seatCount))
   }
 
   private beginDeal(live: LiveRoom, dealer: Seat | null): void {
+    live.lastSettlement = null
     live.engine = createHand(live.room.roomId, dealer, this.counters.handsStarted + 1, {
       seatCount: live.room.seatCount,
       laiZi: live.room.laiZi,
@@ -701,13 +722,13 @@ export class RoomManager {
     }
   }
 
-  private play(live: LiveRoom, playerId: PlayerId, cards: CardId[]): void {
+  private async play(live: LiveRoom, playerId: PlayerId, cards: CardId[]): Promise<void> {
     const engine = this.requireEngine(live, 'playing')
     const seat = this.requireSeat(live, playerId)
     const result = applyPlay(engine, seat, cards, live.seq + 1, nowIso())
     if (!result.ok) throw fail(result.code, result.reason)
     this.patchSeat(live, seat, { cardsLeft: engine.hand.hands[seat]?.length ?? 0 })
-    if (engine.phase === 'settled') void this.settle(live)
+    if (engine.phase === 'settled') await this.settle(live)
     else live.deadlineAt = Date.now() + this.turnMs(live)
   }
 
@@ -729,13 +750,17 @@ export class RoomManager {
 
   private async rematch(live: LiveRoom, playerId: PlayerId): Promise<void> {
     if (live.room.phase !== 'waiting') throw fail('phase', 'not waiting')
-    const seated = this.seatOf(live, playerId) !== null || live.room.hostPlayerId === playerId
-    if (!seated) throw fail('illegal', 'not seated')
+    if (playerId !== live.room.hostPlayerId) throw fail('auth', 'host only')
+    live.lastSettlement = null
+    live.preDealMing.clear()
     live.room = {
       ...live.room,
       seats: live.room.seats.map((seat) => ({
         ...seat,
-        ready: seat.playerId === live.room.hostPlayerId,
+        ready: false,
+        role: 'empty' as const,
+        cardsLeft: 0,
+        autoPlay: false,
       })),
     }
   }
@@ -773,16 +798,25 @@ export class RoomManager {
         await this.ledger.unfreeze(seat.playerId, this.ledger.getEscrow(seat.playerId), live.room.roomId)
       }
     }
+    const ids = new Set<PlayerId>([
+      ...live.room.seats.map((seat) => seat.playerId).filter((id): id is PlayerId => Boolean(id)),
+      ...live.room.spectatorIds,
+    ])
+    live.lastSettlement = null
     live.room = { ...live.room, phase: 'closed' }
     this.unclaimRoom(live.room.roomId)
+    for (const playerId of ids) {
+      this.emit(live, { type: 'left', seq: live.seq + 1, reason: '房间已解散' }, playerId)
+      this.dropSession(playerId, live.room.roomId)
+    }
   }
 
   private async settle(live: LiveRoom): Promise<void> {
     const engine = live.engine
     if (!engine || engine.hand.landlordSeat === null) return
-    live.room = { ...live.room, phase: 'settling' }
     const playerIds = live.room.seats.map((seat) => seat.playerId) as PlayerId[]
     if (playerIds.some((id) => !id)) return
+    live.room = { ...live.room, phase: 'settling' }
     const landlord = engine.hand.landlordSeat
     const winner = (engine.hand.hands[landlord] ?? []).length === 0 ? 'landlord' : 'farmers'
     const settlement = scoreHand({
@@ -864,8 +898,13 @@ export class RoomManager {
         return
       }
       this.patchSeat(live, timedOut, { cardsLeft: engine.hand.hands[timedOut]?.length ?? 0 })
-      if (engine.phase === 'settled') void this.settle(live)
-      else live.deadlineAt = now + this.turnMs(live)
+      if (engine.phase === 'settled') {
+        void this.settle(live).then(() => { this.broadcast(live) }).catch((error: unknown) => {
+          this.ctx?.logger?.warn(error)
+        })
+        return
+      }
+      live.deadlineAt = now + this.turnMs(live)
       this.broadcast(live)
       return
     }
@@ -1083,7 +1122,15 @@ export class RoomManager {
       legal,
       remainingRanks,
       chat: live.chat.slice(-20),
+      settlement: live.lastSettlement,
     }
+  }
+
+  private async ensureSeatCap(live: LiveRoom, playerId: PlayerId): Promise<void> {
+    const cap = seatCapAtoms(live.room.stakeAtoms, live.room.maxMultiplier, live.room.seatCount)
+    if (this.ledger.getEscrow(playerId) >= cap) return
+    if (this.ledger.getAvailable(playerId) < cap) throw fail('insufficient', 'need more welcome atoms')
+    await this.ledger.freeze(playerId, cap, live.room.roomId)
   }
 
   private mingPaiView(live: LiveRoom): Partial<Record<Seat, boolean>> {

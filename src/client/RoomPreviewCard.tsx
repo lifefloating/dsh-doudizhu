@@ -34,7 +34,7 @@ export function RoomPreviewCard({
         {preview.seats.map((seat) => (
           <li key={seat.seat}>
             <span>{seat.displayName ?? '空座'}</span>
-            {seat.host ? <span className={css.badge}>房主</span> : null}
+            {seat.host ? <span className={`${css.badge} ${css.badgeHost}`}>房主</span> : null}
             {seat.ready && !seat.host ? <span className={css.ready}>已准备</span> : null}
           </li>
         ))}

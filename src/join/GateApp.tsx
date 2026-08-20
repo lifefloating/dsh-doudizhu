@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { doudizhuSpaPath } from '../client/hash.ts'
 import { DSH_HOME, PLUGIN_INSTALL_CMD, PLUGIN_REPO } from '../client/links.ts'
 import { ROLE_ICONS } from '../client/SeatAvatar.tsx'
+import { SeatTags } from '../client/SeatTags.tsx'
 import css from '../client/styles.module.css'
 import { probeInviteEnv, type InviteEnv } from './detect.ts'
 
@@ -42,15 +43,15 @@ export function GateApp() {
           <div className={css.roleHero}>
             <figure className={css.roleHeroItem}>
               <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="" />
-              <figcaption>地主</figcaption>
+              <figcaption><SeatTags role="landlord" /></figcaption>
             </figure>
             <figure className={css.roleHeroItem}>
               <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="" />
-              <figcaption>农民</figcaption>
+              <figcaption><SeatTags role="farmer" /></figcaption>
             </figure>
             <figure className={css.roleHeroItem}>
               <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="" />
-              <figcaption>农民</figcaption>
+              <figcaption><SeatTags role="farmer" /></figcaption>
             </figure>
           </div>
           <h2>加入斗地主</h2>

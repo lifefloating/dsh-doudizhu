@@ -1,4 +1,5 @@
 import { ROLE_ICONS } from './SeatAvatar.tsx'
+import { SeatTags } from './SeatTags.tsx'
 import css from './styles.module.css'
 
 export function JoinForm({
@@ -20,19 +21,19 @@ export function JoinForm({
       <div className={css.roleHero}>
         <figure className={css.roleHeroItem}>
           <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
-          <figcaption>地主</figcaption>
+          <figcaption><SeatTags role="landlord" /></figcaption>
         </figure>
         <figure className={css.roleHeroItem}>
           <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
-          <figcaption>农民</figcaption>
+          <figcaption><SeatTags role="farmer" /></figcaption>
         </figure>
         <figure className={css.roleHeroItem}>
           <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
-          <figcaption>农民</figcaption>
+          <figcaption><SeatTags role="farmer" /></figcaption>
         </figure>
         <figure className={css.roleHeroItem}>
           <img className={css.roleHeroImg} src={ROLE_ICONS.farmerC} alt="农民" />
-          <figcaption>农民</figcaption>
+          <figcaption><SeatTags role="farmer" /></figcaption>
         </figure>
       </div>
       <p className={css.hint}>先看房间信息，点确定后再进。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>

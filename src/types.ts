@@ -130,6 +130,7 @@ export interface PlayerView {
   readonly legal: { readonly canPass: boolean; readonly combos: readonly LegalCombo[] }
   readonly remainingRanks: Readonly<Record<string, number>> | null
   readonly chat: readonly ChatLine[]
+  readonly settlement: PublicSettlement | null
 }
 
 export interface ChatLine {

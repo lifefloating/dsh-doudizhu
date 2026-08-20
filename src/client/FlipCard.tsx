@@ -5,7 +5,7 @@ import { CardFace } from './CardFace.tsx'
 import { prefersReducedMotion } from './card-motion.ts'
 import css from './styles.module.css'
 
-const CARD_BACK = '/doudizhu/assets/card-back.png'
+const CARD_BACK = '/doudizhu/assets/card-back.webp'
 
 export function FlipCard({
   card,

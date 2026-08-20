@@ -4,12 +4,12 @@ import css from './styles.module.css'
 const ASSET = '/doudizhu/assets'
 
 export const ROLE_ICONS = {
-  landlord: `${ASSET}/role-landlord.png`,
-  landlordB: `${ASSET}/role-landlord-b.png`,
-  farmer: `${ASSET}/role-farmer.png`,
-  farmerB: `${ASSET}/role-farmer-b.png`,
-  farmerC: `${ASSET}/role-farmer-c.png`,
-  spectator: `${ASSET}/role-spectator.png`,
+  landlord: `${ASSET}/role-landlord.webp`,
+  landlordB: `${ASSET}/role-landlord-b.webp`,
+  farmer: `${ASSET}/role-farmer.webp`,
+  farmerB: `${ASSET}/role-farmer-b.webp`,
+  farmerC: `${ASSET}/role-farmer-c.webp`,
+  spectator: `${ASSET}/role-spectator.webp`,
 } as const
 
 const FARMER_ICONS = [ROLE_ICONS.farmer, ROLE_ICONS.farmerB, ROLE_ICONS.farmerC] as const

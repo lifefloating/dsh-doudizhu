@@ -16,7 +16,7 @@ export function CardBack({
 }) {
   const remaining = Math.max(0, count)
   const n = compact ? visibleBackCount(remaining) : Math.min(remaining, 20)
-  const src = landlord ? `${ASSET}/card-back-landlord.png` : `${ASSET}/card-back.png`
+  const src = landlord ? `${ASSET}/card-back-landlord.webp` : `${ASSET}/card-back.webp`
   return (
     <div className={`${css.remain} ${compact ? css.remainCompact : ''}`}>
       {compact && remaining > 0

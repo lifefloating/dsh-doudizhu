@@ -9,19 +9,19 @@ describe('card art', () => {
   it('keeps whale-maid stickers on face cards and jokers only', () => {
     expect([...FACE_ART_RANKS]).toEqual(['J', 'Q', 'K', 'A'])
     for (const rank of FACE_ART_RANKS) {
-      const name = `face-${rank.toLowerCase()}.png`
+      const name = `face-${rank.toLowerCase()}.webp`
       const asset = joinAsset(name)
       expect(asset, name).not.toBeNull()
-      expect(asset?.type).toBe('image/png')
+      expect(asset?.type).toBe('image/webp')
       expect((asset?.body.length ?? 0) > 1000).toBe(true)
     }
-    for (const name of ['joker-red.png', 'joker-black.png']) {
-      expect(joinAsset(name)?.type).toBe('image/png')
+    for (const name of ['joker-red.webp', 'joker-black.webp']) {
+      expect(joinAsset(name)?.type).toBe('image/webp')
     }
     expect(jokerTone('RJ')).toBe('red')
     expect(jokerTone('BJ')).toBe('black')
     for (const rank of NUMBER_RANKS) {
-      expect(joinAsset(`face-${rank.toLowerCase()}.png`), rank).toBeNull()
+      expect(joinAsset(`face-${rank.toLowerCase()}.webp`), rank).toBeNull()
     }
   })
 })

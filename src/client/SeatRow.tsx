@@ -2,6 +2,7 @@ import type { CardId, SeatState } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
 import { FlipCard } from './FlipCard.tsx'
 import { SeatAvatar } from './SeatAvatar.tsx'
+import { SeatTags } from './SeatTags.tsx'
 import css from './styles.module.css'
 
 export function SeatRow({
@@ -42,10 +43,11 @@ export function SeatRow({
         <div className={css.seatMeta}>
           <div className={css.seatName}>
             {seat.displayName ?? '空座'}
-            {host ? <span className={css.badge}>房主</span> : null}
-            {seat.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
-            {seat.role === 'farmer' ? <span className={css.badge}>农民</span> : null}
-            {mingPai || (revealed && revealed.length > 0) ? <span className={css.badge}>明牌</span> : null}
+            <SeatTags
+              host={host}
+              role={seat.role}
+              mingPai={mingPai || Boolean(revealed && revealed.length > 0)}
+            />
           </div>
           {waiting && seat.playerId
             ? <div className={seat.ready ? css.ready : css.muted}>{seat.ready ? '已准备' : '未准备'}</div>

@@ -52,6 +52,7 @@ function view(input: {
     legal: { canPass: false, combos: [] },
     remainingRanks: null,
     chat: [],
+    settlement: null,
   }
 }
 

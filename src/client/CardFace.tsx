@@ -6,7 +6,7 @@ const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '�
 const ASSET = '/doudizhu/assets'
 export const FACE_ART_RANKS = ['J', 'Q', 'K', 'A'] as const
 const FACE_ART: Record<string, string> = Object.fromEntries(
-  FACE_ART_RANKS.map((rank) => [rank, `${ASSET}/face-${rank.toLowerCase()}.png`]),
+  FACE_ART_RANKS.map((rank) => [rank, `${ASSET}/face-${rank.toLowerCase()}.webp`]),
 )
 
 function cardBase(card: CardId | string): string {
@@ -41,7 +41,7 @@ export function CardFace({
         <span className={css.jokerWord} aria-hidden="true">JOKER</span>
         <img
           className={css.jokerArt}
-          src={red ? `${ASSET}/joker-red.png` : `${ASSET}/joker-black.png`}
+          src={red ? `${ASSET}/joker-red.webp` : `${ASSET}/joker-black.webp`}
           alt={red ? '红Joker' : '黑Joker'}
         />
         <span className={`${css.jokerWord} ${css.jokerWordEnd}`} aria-hidden="true">JOKER</span>

@@ -15,10 +15,10 @@ describe('opponent remaining stack', () => {
   })
 
   it('serves a distinct landlord card back', () => {
-    const farmer = joinAsset('card-back.png')
-    const landlord = joinAsset('card-back-landlord.png')
-    expect(farmer?.type).toBe('image/png')
-    expect(landlord?.type).toBe('image/png')
+    const farmer = joinAsset('card-back.webp')
+    const landlord = joinAsset('card-back-landlord.webp')
+    expect(farmer?.type).toBe('image/webp')
+    expect(landlord?.type).toBe('image/webp')
     expect((landlord?.body.length ?? 0) > 1000).toBe(true)
     expect(landlord?.body.equals(farmer?.body ?? Buffer.alloc(0))).toBe(false)
   })

@@ -41,6 +41,7 @@ function view(input: Partial<PlayerView['room']> & { bid?: number; available?: s
     legal: { canPass: false, combos: [] },
     remainingRanks: null,
     chat: [],
+    settlement: null,
   }
 }
 

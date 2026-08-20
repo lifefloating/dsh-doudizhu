@@ -6,7 +6,7 @@ import {
   assertMutatingHeaders, assertOrigin, cookieHeader, header, isLoopbackHost, parseCookies,
 } from './auth.ts'
 import { encodeJson } from './json.ts'
-import { joinAsset, joinPageHtml } from './join-page.ts'
+import { assetCacheControl, joinAsset, joinPageHtml } from './join-page.ts'
 
 export function registerDouDizhuHttp(server: WebServer, manager: RoomManager): Array<() => void> {
   const prefix = manager.getConfig().routePrefix
@@ -34,7 +34,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, manager: RoomMa
         send(res, 404, '')
         return
       }
-      send(res, 200, asset.body, { 'content-type': asset.type, 'cache-control': 'no-store' })
+      send(res, 200, asset.body, { 'content-type': asset.type, 'cache-control': assetCacheControl(name) })
       return
     }
     if (req.method === 'GET' && (path === `${prefix}/join.js` || path === `${prefix}/index.js`)) {

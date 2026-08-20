@@ -4,12 +4,14 @@ import {
   type PlayerView, type Seat, type SeatState,
 } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
+import { ChatLog } from './ChatLog.tsx'
 import { DealAnimation } from './DealAnimation.tsx'
 import { FlipCard } from './FlipCard.tsx'
 import { HandFan } from './HandFan.tsx'
 import { PlayFly } from './PlayFly.tsx'
 import { SeatAvatar } from './SeatAvatar.tsx'
 import { SeatRow } from './SeatRow.tsx'
+import { SeatTags } from './SeatTags.tsx'
 import { opponentSeats } from './seat-layout.ts'
 import { selectionLegal } from './store.ts'
 import { opponentTurnCue, yourTurnToastKey } from './turn-cue.ts'
@@ -80,6 +82,7 @@ export function TableView({
         ))}
       </div>
       <div className={css.centerPlay} data-play-zone>
+        <ChatLog lines={view.chat} />
         {phase === 'dealing'
           ? <DealAnimation seatCount={count} selfSeat={layoutSelf} />
           : view.lastPlays.slice(-1).map((play, index) => (
@@ -117,14 +120,14 @@ export function TableView({
           )
           : null}
       </div>
-      <div className={css.bottom}>
+      <div className={css.bottom} data-hole="">
         {view.bottom
           ? view.bottom.map((card, index) => (
             <FlipCard key={card} card={card} faceUp laiZiRanks={laiZi} delay={index * 0.08} />
           ))
-          : phase !== 'waiting' && phase !== 'dealing'
-            ? <CardBack count={holeCount(count)} />
-            : null}
+          : Array.from({ length: holeCount(count) }, (_, index) => (
+            <CardBack key={index} />
+          ))}
       </div>
       {view.you.spectator
         ? (
@@ -134,7 +137,7 @@ export function TableView({
                 <SeatAvatar spectator />
                 <div className={css.seatName}>
                   我
-                  <span className={css.badge}>观战</span>
+                  <SeatTags spectator />
                 </div>
               </div>
             </div>
@@ -153,19 +156,20 @@ export function TableView({
               />
               <div className={css.seatName}>
                 我
-                {isHost ? <span className={css.badge}>房主</span> : null}
-                {mine?.role === 'landlord' ? <span className={css.badge}>地主</span> : null}
-                {mine?.role === 'farmer' ? <span className={css.badge}>农民</span> : null}
-                {selfSeat !== null && view.mingPaiBySeat?.[selfSeat] ? <span className={css.badge}>明牌</span> : null}
+                <SeatTags
+                  host={isHost}
+                  role={mine?.role ?? 'empty'}
+                  mingPai={selfSeat !== null && Boolean(view.mingPaiBySeat?.[selfSeat])}
+                />
+                {waiting && !isHost
+                  ? <span className={mine?.ready ? css.ready : css.muted}>{mine?.ready ? '已准备' : '未准备'}</span>
+                  : mine?.autoPlay
+                    ? <span className={css.muted}>托管</span>
+                    : null}
               </div>
-              {waiting && !isHost
-                ? <div className={mine?.ready ? css.ready : css.muted}>{mine?.ready ? '已准备' : '未准备'}</div>
-                : mine?.autoPlay
-                  ? <div className={css.muted}>托管</div>
-                  : null}
             </div>
-            {phase === 'waiting' || phase === 'dealing'
-              ? <CardBack count={holeCount(count)} compact />
+            {phase === 'waiting'
+              ? null
               : (
                 <div className={css.selfPlay} data-self-play>
                   <ActionBar
@@ -177,51 +181,42 @@ export function TableView({
                     onPlay={onPlay}
                     onPass={onPass}
                   />
-                  <HandFan
-                    cards={view.you.cards}
-                    selected={selected}
-                    laiZiRanks={laiZi}
-                    canPlay={phase === 'playing' && isTurn(view) && !view.you.spectator}
-                    onToggle={onToggle}
-                    onPlay={(cards) => {
-                      if (!selectionLegal(view, [...cards])) return
-                      onPlay(cards)
-                    }}
-                  />
+                  {phase === 'dealing'
+                    ? null
+                    : (
+                      <HandFan
+                        cards={view.you.cards}
+                        selected={selected}
+                        laiZiRanks={laiZi}
+                        canPlay={phase === 'playing' && isTurn(view) && !view.you.spectator}
+                        onToggle={onToggle}
+                        onPlay={(cards) => {
+                          if (!selectionLegal(view, [...cards])) return
+                          onPlay(cards)
+                        }}
+                      />
+                    )}
                 </div>
               )}
           </div>
         )}
-      {phase === 'dealing' && !view.you.spectator
+      {!view.you.spectator
         ? (
-          <ActionBar
-            view={view}
-            legal={legal}
-            onBid={onBid}
-            onDouble={onDouble}
-            {...(onMingPai ? { onMingPai } : {})}
-            onPlay={onPlay}
-            onPass={onPass}
-          />
-        )
-        : null}
-      <div className={css.chat}>
-        {view.chat.map((line) => <div key={line.ts}>{line.displayName}: {line.text}</div>)}
-        {!view.you.spectator
-          ? (
-            <form onSubmit={(event) => {
+          <form
+            className={css.chatComposer}
+            data-chat-composer=""
+            onSubmit={(event) => {
               event.preventDefault()
               const data = new FormData(event.currentTarget)
               const text = String(data.get('chat') ?? '')
               if (text) onChat(text)
               event.currentTarget.reset()
             }}
-            >
-              <input className={css.input} name="chat" maxLength={80} placeholder="聊天" />
-            </form>
-          )
-          : null}
-      </div>
+          >
+            <input className={`${css.input} ${css.chatInput}`} name="chat" maxLength={80} placeholder="聊天" autoComplete="off" />
+          </form>
+        )
+        : null}
     </div>
   )
 }

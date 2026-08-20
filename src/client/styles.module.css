@@ -342,6 +342,11 @@
   gap: 4px;
   padding: 6px 20px 4px;
   overflow: hidden;
+  position: relative;
+}
+
+.table:has([data-chat-composer]) {
+  padding-bottom: 44px;
 }
 
 .root:has([data-table]) .topbar {
@@ -416,14 +421,15 @@
   white-space: nowrap;
 }
 .seatRight .seatHead { flex-direction: row-reverse; }
-.seatMeta { min-width: 0; overflow: hidden; }
+.seatMeta { min-width: 0; overflow: visible; }
 .seatName {
   font-weight: 600;
   font-size: 15px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .selfRow {
@@ -447,8 +453,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 10px;
   position: absolute;
   left: 0;
   bottom: 0;
@@ -456,12 +462,19 @@
   width: var(--self-seat-col);
   flex: none;
   pointer-events: none;
+  overflow: visible;
+}
+
+.selfSeat .seatName {
+  align-self: flex-start;
+  width: max-content;
 }
 
 .selfPlay {
   display: flex;
   flex-direction: column;
   align-items: center;
+  align-self: stretch;
   gap: 0;
   flex: 1 1 auto;
   width: 100%;
@@ -510,6 +523,48 @@
   padding-left: 0;
 }
 
+.settlementList {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settlementList li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 14px;
+}
+
+.settlementList li span:last-child {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.settlementWin span:last-child {
+  color: #1a7f37;
+}
+
+.settlementLose span:last-child {
+  color: var(--dsw-alias-label-error, #d64545);
+}
+
+.settlementActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.settlementActions .primary,
+.settlementActions .danger {
+  flex: 1;
+}
+
 .roleHero {
   display: flex;
   justify-content: center;
@@ -523,10 +578,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   font-weight: 500;
   color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.roleHeroItem figcaption {
+  margin: 0;
+  line-height: 1;
 }
 
 .roleHeroImg {
@@ -539,15 +599,37 @@
 .badge {
   display: inline-block;
   font-size: 13px;
-  padding: 3px 10px;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-module-platform, #f3f3f3);
+  border: 1.5px solid var(--dsw-alias-border-l2, #e8e8e8);
+  background: transparent;
   color: var(--dsw-alias-label-secondary, #5c5c5c);
   font-weight: 600;
   flex: none;
+  box-sizing: border-box;
 }
 
-.ready { color: var(--dsw-alias-label-success, #2f8f62); font-size: 12px; }
+.badgeHost {
+  color: #8a79b0;
+  border-color: #8a79b0;
+}
+
+.badgeLandlord {
+  color: #dcc45c;
+  border-color: #dcc45c;
+}
+
+.badgeFarmer {
+  color: #e86e6e;
+  border-color: #e86e6e;
+}
+
+.ready {
+  color: var(--dsw-alias-label-success, #2f8f62);
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
 
 .avatar {
   width: 72px;
@@ -660,6 +742,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .yourTurnToast { animation: none; }
+  .chatLogLine { animation: none; }
 }
 
 .dealCanvas {
@@ -801,7 +884,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   flex: none;
 }
@@ -811,7 +894,10 @@
   width: 44px;
   height: 62px;
 }
-.bottom .remain { gap: 4px; }
+.bottom .remain,
+.bottom .backs {
+  display: contents;
+}
 
 .hand {
   display: flex;
@@ -996,6 +1082,9 @@
 
 @media (max-width: 720px) {
   .table { padding: 6px 10px 4px; }
+  .table:has([data-chat-composer]) { padding-bottom: 44px; }
+  .chatComposer { left: 10px; width: 168px; }
+  .chatLog { width: min(240px, 48%); }
   .codeBar { flex-wrap: wrap; row-gap: 4px; }
   .codeMeta { flex: 1 1 12em; min-width: 8em; }
   .avatar { width: 48px; height: 48px; }
@@ -1005,7 +1094,7 @@
     gap: 8px;
     min-height: 72px;
   }
-  .selfSeat { flex-direction: column; gap: 4px; }
+  .selfSeat { flex-direction: column; gap: 8px; }
   .selfPlay .actions { padding-left: 0; padding-right: 0; }
 
   .seatHead,
@@ -1296,12 +1385,112 @@
   border-bottom: 1px solid var(--dsw-alias-border-l2, #e8e8e8);
 }
 
-.chat {
-  max-height: 40px;
-  overflow: auto;
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+.chatLog {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: min(300px, 38%);
+  height: min(340px, 100%);
+  max-height: calc(100% - 16px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: transparent;
+  pointer-events: auto;
+  box-sizing: border-box;
+  border-radius: 12px;
+}
+
+.chatLog:hover {
+  background: rgba(126, 200, 255, 0.06);
+}
+
+.chatLogClose {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(126, 200, 255, 0.22);
+  color: #5eb0ff;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.chatLog:hover .chatLogClose {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.chatLogClose:hover,
+.chatLogClose:focus-visible {
+  background: rgba(126, 200, 255, 0.4);
+  color: #3a9dff;
+  outline: none;
+}
+
+.chatLogScroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 100%;
+  padding: 24px 12px 8px 10px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 100%);
+  scrollbar-width: none;
+}
+
+.chatLogScroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chatLogLine {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  text-shadow: 0 0 8px var(--dsw-alias-bg-base, #fff);
+  word-break: break-word;
+  white-space: normal;
+  animation: chatLogIn 220ms ease-out;
+}
+
+.chatLogName {
+  font-weight: 650;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+@keyframes chatLogIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chatComposer {
+  position: absolute;
+  left: 20px;
+  bottom: 6px;
+  z-index: 5;
+  width: 200px;
+  max-width: calc(100% - 40px);
+  margin: 0;
   flex: none;
+  pointer-events: auto;
+}
+
+.chatInput {
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  border-radius: 10px;
 }
 
 /* Settings card: same chrome as DSH PluginCard */

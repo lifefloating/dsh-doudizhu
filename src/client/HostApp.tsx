@@ -99,7 +99,12 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   }, [])
 
   const applyView = (view: PlayerView): void => {
-    setState((prev) => ({ ...prev, view, selected: retainSelected(prev.selected, view.you.cards) }))
+    setState((prev) => ({
+      ...prev,
+      view,
+      selected: retainSelected(prev.selected, view.you.cards),
+      settlement: view.settlement,
+    }))
   }
 
   const startRoom = async (): Promise<void> => {
@@ -186,6 +191,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         applyView(event.view)
       }
       if (event.type === 'settled') {
+        if (event.seq < seq.value) return
         seq.value = event.seq
         setState((prev) => ({ ...prev, settlement: event.settlement }))
       }
@@ -193,7 +199,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         dropToLobby('房主把你踢出了房间')
       }
       if (event.type === 'left') {
-        dropToLobby('连接断开，已离开房间')
+        dropToLobby(event.reason === '房间已解散' ? '房间已解散' : '连接断开，已离开房间')
       }
       if (event.type === 'reject') {
         setState((prev) => ({ ...prev, error: event.reason }))
@@ -209,7 +215,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   }
 
   const view = state.view
-  const showSettlement = Boolean(state.settlement && view?.room.phase === 'waiting')
+  const showSettlement = Boolean(state.settlement)
   const inTable = Boolean(view) && !showSettlement
   const seconds = useDeadline(
     inTable && view && (view.room.phase === 'playing' || view.room.phase === 'bidding' || view.room.phase === 'doubling')
@@ -220,7 +226,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   return (
     <div className={css.root}>
       <div className={css.topbar}>
-        {inTable && view && state.roomCode
+        {view && state.roomCode
           ? (
             <RoomCodeBar
               brand="斗地主"
@@ -228,7 +234,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
               roomCode={state.roomCode}
               {...(state.sitUrl ? { sitUrl: state.sitUrl } : {})}
               shareable={state.shareable}
-              canRename
+              canRename={!showSettlement}
               onRename={(next) => { command({ type: 'rename', title: next }) }}
               meta={tableMeta(view, seconds)}
               aside={<span className={css.muted}>{tableBalance(view)}</span>}
@@ -293,14 +299,13 @@ export function HostApp({ onClose }: { onClose: () => void }) {
             }}
           />
           )
-        : state.settlement && state.view.room.phase === 'waiting'
+        : state.settlement && state.view
           ? (
             <SettlementView
               settlement={state.settlement}
-              onRematch={() => {
-                setState((prev) => ({ ...prev, settlement: null }))
-                command({ type: 'rematch' })
-              }}
+              view={state.view}
+              onRematch={() => { command({ type: 'rematch' }) }}
+              onClose={() => { command({ type: 'hostClose' }) }}
             />
           )
           : (

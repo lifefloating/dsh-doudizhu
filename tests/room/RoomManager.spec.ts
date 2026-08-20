@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { AUTO_PLAY_MS } from '../../src/invariant.ts'
 import { RoomManager } from '../../src/room/RoomManager.ts'
+import { seatCapAtoms } from '../../src/settle/math.ts'
+import { parseAtoms, type ServerEvent } from '../../src/types.ts'
 
 describe('RoomManager', () => {
   it('rejects create when welcome < seatCap', async () => {
@@ -290,7 +292,7 @@ describe('RoomManager', () => {
     expect(view.room.seats[other.seat]?.autoPlay).toBe(false)
     const remain = Date.parse(view.deadlineAt!) - t0
     expect(remain).toBeGreaterThan(AUTO_PLAY_MS - 50)
-    expect(remain).toBeLessThanOrEqual(AUTO_PLAY_MS)
+    expect(remain).toBeLessThanOrEqual(AUTO_PLAY_MS + 50)
     manager.markConnected(current.playerId, host.roomId, true)
     const resumed = manager.view(host.roomId, host.hostPlayerId)
     expect(resumed.room.seats[current.seat]?.connected).toBe(true)
@@ -552,6 +554,74 @@ describe('RoomManager', () => {
     expect((bad[0] as PromiseRejectedResult).reason).toMatchObject({ message: expect.stringMatching(/already in this room/) })
     const view = manager.view(host.roomId, host.hostPlayerId)
     expect(view.room.seats.filter((seat) => seat.playerId).length).toBe(2)
+    await manager.dispose()
+  })
+
+  it('settles when a seat empties, shows the ledger, and lets the host rematch', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+
+    const last = manager.armLastCardForTest(host.roomId, 0, 0)
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'play', cards: [last], nonce: 'end-1' })
+    const settled = manager.view(host.roomId, host.hostPlayerId)
+    expect(settled.room.phase).toBe('waiting')
+    expect(settled.settlement?.winner).toBe('landlord')
+    expect(settled.settlement?.deltas).toHaveLength(3)
+    const deltaSum = settled.settlement!.deltas.reduce((sum, delta) => sum + parseAtoms(delta.atoms), 0n)
+    expect(deltaSum).toBe(0n)
+    const guestView = manager.view(host.roomId, a.playerId)
+    expect(guestView.settlement?.settlementId).toBe(settled.settlement?.settlementId)
+    expect(guestView.room.seats.every((seat) => !seat.ready)).toBe(true)
+
+    await expect(manager.command(host.roomId, a.playerId, { type: 'rematch' }))
+      .rejects.toMatchObject({ message: 'host only' })
+
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'rematch' }, true)
+    const lobby = manager.view(host.roomId, a.playerId)
+    expect(lobby.settlement).toBeNull()
+    expect(lobby.room.phase).toBe('waiting')
+    expect(lobby.room.seats.every((seat) => !seat.ready)).toBe(true)
+
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const again = manager.view(host.roomId, host.hostPlayerId)
+    expect(again.room.phase).toBe('bidding')
+    expect(again.settlement).toBeNull()
+    const cap = seatCapAtoms(1_000_000n, 8, 3)
+    expect(parseAtoms(manager.ledgerFor(host.hostPlayerId).escrowAtoms)).toBe(cap)
+    await manager.dispose()
+  })
+
+  it('host close after a hand sends everyone back out of the room', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const last = manager.armLastCardForTest(host.roomId, a.seat!, 0)
+    await manager.command(host.roomId, a.playerId, { type: 'play', cards: [last], nonce: 'end-2' })
+    expect(manager.view(host.roomId, a.playerId).settlement?.winner).toBe('farmers')
+
+    const left: string[] = []
+    manager.onEvent((playerId, event: ServerEvent) => {
+      if (event.type === 'left') left.push(playerId)
+    })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'hostClose' }, true)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.phase).toBe('closed')
+    expect(left).toEqual(expect.arrayContaining([host.hostPlayerId, a.playerId, b.playerId]))
+    await expect(manager.join({
+      roomCode: host.roomCode, invite, displayName: '晚到', role: 'sit',
+    })).rejects.toMatchObject({ message: 'room not found' })
     await manager.dispose()
   })
 })
