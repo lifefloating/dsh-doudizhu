@@ -1,6 +1,6 @@
 {
   "name": "dsh-poker",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "斗地主房间插件。三人/四人、经典/癞子，Host 权威房间 + 欢迎积分账本。",
   "author": "lifefloating",
   "license": "MIT",
