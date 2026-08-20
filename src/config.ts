@@ -30,6 +30,8 @@ export interface PluginConfig {
   retainClosedRoomsHours?: number
   inviteTtlHours?: number
   routePrefix?: string
+  /** Test-only. Not a settings field. */
+  dealAnimMs?: number
 }
 
 export const Config = z.object({
@@ -48,7 +50,7 @@ export const Config = z.object({
   turnTimeoutMs: z.number().default(DEFAULT_TURN_TIMEOUT_MS),
   doubleWindowMs: z.number().default(8_000),
   heartbeatMs: z.number().default(15_000),
-  disconnectAfterMs: z.number().default(60_000),
+  disconnectAfterMs: z.number().default(180_000),
   retainClosedRoomsHours: z.number().default(24),
   inviteTtlHours: z.number().default(24),
   routePrefix: z.string().default('/doudizhu'),
@@ -74,6 +76,8 @@ export interface ResolvedConfig {
   retainClosedRoomsHours: number
   inviteTtlHours: number
   routePrefix: string
+  /** Test-only override. Production uses `dealAnimationMs(seatCount)`. */
+  dealAnimMs?: number
 }
 
 export function resolveConfig(config: PluginConfig): ResolvedConfig {
@@ -96,10 +100,11 @@ export function resolveConfig(config: PluginConfig): ResolvedConfig {
     turnTimeoutMs: config.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS,
     doubleWindowMs: config.doubleWindowMs ?? 8_000,
     heartbeatMs: config.heartbeatMs ?? 15_000,
-    disconnectAfterMs: config.disconnectAfterMs ?? 60_000,
+    disconnectAfterMs: config.disconnectAfterMs ?? 180_000,
     retainClosedRoomsHours: config.retainClosedRoomsHours ?? 24,
     inviteTtlHours: config.inviteTtlHours ?? 24,
     routePrefix: normalizePrefix(config.routePrefix ?? '/doudizhu'),
+    ...(config.dealAnimMs !== undefined ? { dealAnimMs: config.dealAnimMs } : {}),
   }
 }
 

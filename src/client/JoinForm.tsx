@@ -35,7 +35,7 @@ export function JoinForm({
           <figcaption>农民</figcaption>
         </figure>
       </div>
-      <p className={css.hint}>填房号就能进。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
+      <p className={css.hint}>先看房间信息，点确定后再进。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
       <div className={css.joinFields}>
         {showInvite
           ? (
@@ -64,7 +64,7 @@ export function JoinForm({
           </div>
         </div>
         <button type="button" className={css.primary} disabled={joining || !code.trim()} onClick={onJoin}>
-          {joining ? '加入中…' : '加入'}
+          {joining ? '查询中…' : '查看房间'}
         </button>
         {error ? <p className={css.error}>{error}</p> : null}
       </div>

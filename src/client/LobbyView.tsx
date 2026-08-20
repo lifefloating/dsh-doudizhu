@@ -128,7 +128,7 @@ export function LobbyView({
                 </label>
               </div>
               <p className={css.hint}>
-                {seatCount} 人{laiZi ? '癞子' : '经典'}。人齐自动开打，后来的人观战。出牌 120 秒。入座冻结 {formatM(cap)}，欢迎 {formatM(welcomeAtoms)}。
+                {seatCount} 人{laiZi ? '癞子' : '经典'}。好友点准备，齐了由房主开打。后来的人观战。出牌 120 秒。入座冻结 {formatM(cap)}，欢迎 {formatM(welcomeAtoms)}。
               </p>
               {blocked ? <p className={css.error}>欢迎积分不够入座冻结，把底注或封顶调低，或者去设置里加欢迎积分。</p> : null}
               <button type="button" className={css.primary} disabled={blocked || creating} onClick={onCreate}>

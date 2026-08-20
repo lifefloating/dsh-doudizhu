@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AUTO_PLAY_MS } from '../../src/invariant.ts'
 import { RoomManager } from '../../src/room/RoomManager.ts'
 
 describe('RoomManager', () => {
@@ -54,15 +55,32 @@ describe('RoomManager', () => {
     await manager.dispose()
   })
 
-  it('same invite seats early arrivals and starts when full; later players watch', async () => {
-    const manager = new RoomManager(null, {}, null)
+  it('same invite seats early arrivals; later players watch until host starts', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
     const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
     const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const preview = await manager.peek({ roomCode: host.roomCode, invite })
+    expect(preview.title).toBe('好友局')
+    expect(preview.canSit).toBe(true)
+    expect(preview.seated).toBe(1)
+    await expect(manager.peek({ roomCode: host.roomCode, invite: 'nope' })).rejects.toThrow(/auth|invite/)
     const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
     expect(a.seat).toBe(1)
+    expect(a.view.room.seats[1]?.ready).toBe(false)
     expect(manager.view(host.roomId, host.hostPlayerId).room.phase).toBe('waiting')
     const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
     expect(b.seat).toBe(2)
+    const full = manager.view(host.roomId, host.hostPlayerId)
+    expect(full.room.phase).toBe('waiting')
+    await expect(manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true))
+      .rejects.toThrow(/ready/)
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.ready).toBe(true)
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: false })
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[1]?.ready).toBe(false)
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
     const started = manager.view(host.roomId, host.hostPlayerId)
     expect(started.room.phase).toBe('bidding')
     expect(started.deadlineAt).not.toBeNull()
@@ -75,6 +93,20 @@ describe('RoomManager', () => {
     await manager.dispose()
   })
 
+  it('lets the host kick a guest during waiting', async () => {
+    const manager = new RoomManager(null, {}, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const guest = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    expect(guest.seat).toBe(1)
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'hostKick', playerId: guest.playerId }, true)
+    const view = manager.view(host.roomId, host.hostPlayerId)
+    expect(view.room.seats[1]?.playerId).toBeNull()
+    await expect(manager.command(host.roomId, guest.playerId, { type: 'ready', ready: true }))
+      .rejects.toThrow(/not seated|not found/)
+    await manager.dispose()
+  })
+
   it('lets a loopback client sit with only the room code', async () => {
     const manager = new RoomManager(null, {}, null)
     const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
@@ -84,6 +116,237 @@ describe('RoomManager', () => {
       roomCode: host.roomCode, invite: '', displayName: '南', role: 'sit', local: true,
     })
     expect(guest.seat).toBe(1)
+    await manager.dispose()
+  })
+
+  it('advances bidding turn after a call so the next seat can rob', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+
+    const players = [
+      { playerId: host.hostPlayerId, seat: 0 as const },
+      { playerId: a.playerId, seat: a.seat! },
+      { playerId: b.playerId, seat: b.seat! },
+    ]
+    const firstView = manager.view(host.roomId, host.hostPlayerId)
+    expect(firstView.room.phase).toBe('bidding')
+    expect(firstView.auction?.kind).toBe('call')
+    const firstSeat = firstView.turnSeat
+    expect(firstSeat).not.toBeNull()
+    const caller = players.find((player) => player.seat === firstSeat)
+    expect(caller).toBeDefined()
+    await manager.command(host.roomId, caller!.playerId, { type: 'bid', action: 'call' })
+
+    const afterCall = manager.view(host.roomId, caller!.playerId)
+    expect(afterCall.auction?.kind).toBe('rob')
+    expect(afterCall.turnSeat).not.toBe(firstSeat)
+    expect(afterCall.turnSeat).toBe(((firstSeat! + 1) % 3))
+    await expect(manager.command(host.roomId, caller!.playerId, { type: 'bid', action: 'rob' }))
+      .rejects.toThrow(/not your bid/)
+
+    const nextPlayer = players.find((player) => player.seat === afterCall.turnSeat)
+    expect(nextPlayer).toBeDefined()
+    const nextView = manager.view(host.roomId, nextPlayer!.playerId)
+    expect(nextView.turnSeat).toBe(nextPlayer!.seat)
+    expect(nextView.auction?.kind).toBe('rob')
+    await manager.command(host.roomId, nextPlayer!.playerId, { type: 'bid', action: 'rob' })
+    const afterRob = manager.view(host.roomId, nextPlayer!.playerId)
+    expect(afterRob.turnSeat).not.toBe(nextPlayer!.seat)
+    expect(afterRob.auction?.kind).toBe('rob')
+    await manager.dispose()
+  })
+
+  it('auto-plays the current seat on turn timeout instead of closing the room', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0, turnTimeoutMs: 1_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const started = manager.view(host.roomId, host.hostPlayerId)
+    expect(started.room.phase).toBe('bidding')
+    const firstTurn = started.turnSeat
+    manager.tickForTest(Date.parse(started.deadlineAt!) + 1)
+    const after = manager.view(host.roomId, host.hostPlayerId)
+    expect(after.room.phase).not.toBe('closed')
+    expect(after.room.phase).not.toBe('waiting')
+    expect(after.turnSeat).not.toBe(firstTurn)
+    expect(after.room.seats.every((seat) => seat.playerId)).toBe(true)
+    expect(after.room.seats.every((seat) => seat.connected)).toBe(true)
+    expect(after.room.seats.find((seat) => seat.seat === firstTurn)?.autoPlay).toBe(true)
+    expect(after.room.seats.filter((seat) => seat.autoPlay)).toHaveLength(1)
+    manager.tickForTest(Date.parse(after.deadlineAt!) + 1)
+    const hosted = manager.view(host.roomId, host.hostPlayerId)
+    expect(hosted.room.seats.filter((seat) => seat.autoPlay).length).toBeGreaterThanOrEqual(2)
+    expect(hosted.room.seats.every((seat) => seat.connected)).toBe(true)
+    await manager.dispose()
+  })
+
+  it('auto-plays a card when the playing deadline expires', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0, turnTimeoutMs: 1_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const players = [
+      { playerId: host.hostPlayerId, seat: 0 as const },
+      { playerId: a.playerId, seat: a.seat! },
+      { playerId: b.playerId, seat: b.seat! },
+    ]
+    const first = manager.view(host.roomId, host.hostPlayerId)
+    const caller = players.find((player) => player.seat === first.turnSeat)
+    await manager.command(host.roomId, caller!.playerId, { type: 'bid', action: 'call' })
+    for (let i = 0; i < 4; i += 1) {
+      const view = manager.view(host.roomId, host.hostPlayerId)
+      if (view.room.phase !== 'bidding') break
+      const next = players.find((player) => player.seat === view.turnSeat)
+      await manager.command(host.roomId, next!.playerId, { type: 'bid', action: 'pass' })
+    }
+    const doubling = manager.view(host.roomId, host.hostPlayerId)
+    expect(doubling.room.phase).toBe('doubling')
+    manager.tickForTest(Date.parse(doubling.deadlineAt!) + 1)
+    const playing = manager.view(host.roomId, host.hostPlayerId)
+    expect(playing.room.phase).toBe('playing')
+    expect(playing.lastPlays).toHaveLength(0)
+    const leadSeat = playing.turnSeat
+    manager.tickForTest(Date.parse(playing.deadlineAt!) + 1)
+    const after = manager.view(host.roomId, host.hostPlayerId)
+    expect(after.room.phase).toBe('playing')
+    expect(after.lastPlays.length).toBeGreaterThan(0)
+    expect(after.lastPlays.at(-1)?.seat).toBe(leadSeat)
+    expect(after.lastPlays.at(-1)?.type).not.toBe('pass')
+    expect(after.turnSeat).not.toBe(leadSeat)
+    expect(after.room.seats.every((seat) => seat.playerId)).toBe(true)
+    expect(after.room.seats.find((seat) => seat.seat === leadSeat)?.autoPlay).toBe(true)
+    expect(after.room.seats.every((seat) => seat.connected)).toBe(true)
+    await manager.dispose()
+  })
+
+  it('marks a dropped socket as 托管 and keeps the others online', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0, turnTimeoutMs: 120_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const before = manager.view(host.roomId, host.hostPlayerId)
+    const players = [
+      { playerId: host.hostPlayerId, seat: 0 as const },
+      { playerId: a.playerId, seat: a.seat! },
+      { playerId: b.playerId, seat: b.seat! },
+    ]
+    const current = players.find((player) => player.seat === before.turnSeat)!
+    const other = players.find((player) => player.seat !== current.seat)!
+    const t0 = Date.now()
+    manager.markDisconnected(current.playerId, host.roomId)
+    const view = manager.view(host.roomId, host.hostPlayerId)
+    expect(view.room.seats[current.seat]?.connected).toBe(false)
+    expect(view.room.seats[current.seat]?.autoPlay).toBe(true)
+    expect(view.room.seats[other.seat]?.connected).toBe(true)
+    expect(view.room.seats[other.seat]?.autoPlay).toBe(false)
+    const remain = Date.parse(view.deadlineAt!) - t0
+    expect(remain).toBeGreaterThan(AUTO_PLAY_MS - 50)
+    expect(remain).toBeLessThanOrEqual(AUTO_PLAY_MS)
+    manager.markConnected(current.playerId, host.roomId, true)
+    const resumed = manager.view(host.roomId, host.hostPlayerId)
+    expect(resumed.room.seats[current.seat]?.connected).toBe(true)
+    expect(resumed.room.seats[current.seat]?.autoPlay).toBe(true)
+    await manager.command(host.roomId, current.playerId, { type: 'chat', text: '我回来了' })
+    expect(manager.view(host.roomId, host.hostPlayerId).room.seats[current.seat]?.autoPlay).toBe(true)
+    await manager.dispose()
+  })
+
+  it('holds cards during the dealing phase until the animation window ends', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 30_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const dealing = manager.view(host.roomId, host.hostPlayerId)
+    expect(dealing.room.phase).toBe('dealing')
+    expect(dealing.you.cards).toEqual([])
+    expect(dealing.publicHands).toEqual([0, 0, 0])
+    await manager.dispose()
+  })
+
+  it('happy-call last robber becomes landlord; caller cannot rob back', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const players = [
+      { playerId: host.hostPlayerId, seat: 0 as const },
+      { playerId: a.playerId, seat: a.seat! },
+      { playerId: b.playerId, seat: b.seat! },
+    ]
+    const first = manager.view(host.roomId, host.hostPlayerId)
+    const caller = players.find((player) => player.seat === first.turnSeat)!
+    await manager.command(host.roomId, caller.playerId, { type: 'bid', action: 'call' })
+    const afterCall = manager.view(host.roomId, host.hostPlayerId)
+    const second = players.find((player) => player.seat === afterCall.turnSeat)!
+    await manager.command(host.roomId, second.playerId, { type: 'bid', action: 'rob' })
+    const afterRob = manager.view(host.roomId, host.hostPlayerId)
+    const third = players.find((player) => player.seat === afterRob.turnSeat)!
+    await manager.command(host.roomId, third.playerId, { type: 'bid', action: 'rob' })
+    const locked = manager.view(host.roomId, host.hostPlayerId)
+    expect(locked.room.phase).toBe('doubling')
+    expect(locked.room.seats[third.seat]?.role).toBe('landlord')
+    expect(locked.bid).toBe(4)
+    await expect(manager.command(host.roomId, caller.playerId, { type: 'bid', action: 'rob' }))
+      .rejects.toThrow(/expected bidding|already acted|not your bid/)
+    await manager.dispose()
+  })
+
+  it('records pre-deal ming pai as ×5 and gives that seat first call', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 0 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'mingPai' })
+    expect(manager.view(host.roomId, a.playerId).mingPaiBySeat[a.seat!]).toBe(true)
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    const view = manager.view(host.roomId, a.playerId)
+    expect(view.room.phase).toBe('bidding')
+    expect(view.turnSeat).toBe(a.seat)
+    expect(view.mingPaiBySeat[a.seat!]).toBe(true)
+    await manager.dispose()
+  })
+
+  it('lets a seated player ming pai while cards are still flying', async () => {
+    const manager = new RoomManager(null, { dealAnimMs: 30_000 }, null)
+    const host = await manager.createRoom({ stakeM: 1, maxMultiplier: 8, hostDisplayName: '东' })
+    const invite = new URL(host.sitUrl).searchParams.get('invite') ?? ''
+    const a = await manager.join({ roomCode: host.roomCode, invite, displayName: '南', role: 'sit' })
+    const b = await manager.join({ roomCode: host.roomCode, invite, displayName: '西', role: 'sit' })
+    await manager.command(a.roomId, a.playerId, { type: 'ready', ready: true })
+    await manager.command(b.roomId, b.playerId, { type: 'ready', ready: true })
+    await manager.command(host.roomId, host.hostPlayerId, { type: 'start' }, true)
+    expect(manager.view(host.roomId, host.hostPlayerId).room.phase).toBe('dealing')
+    await manager.command(host.roomId, a.playerId, { type: 'mingPai' })
+    expect(manager.view(host.roomId, a.playerId).mingPaiBySeat[a.seat!]).toBe(true)
     await manager.dispose()
   })
 })

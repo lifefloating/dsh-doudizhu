@@ -25,12 +25,14 @@ export function SeatAvatar({
   seat = 0,
   occupied = false,
   spectator = false,
+  self = false,
 }: {
   avatarUrl?: string | null
   role?: SeatState['role']
   seat?: number
   occupied?: boolean
   spectator?: boolean
+  self?: boolean
 }) {
   if (spectator) {
     return (
@@ -48,7 +50,7 @@ export function SeatAvatar({
   const landlord = role === 'landlord'
   return (
     <img
-      className={css.avatar}
+      className={`${css.avatar} ${self ? css.avatarSelf : ''}`}
       src={src}
       alt={landlord ? '地主' : sitting ? '农民' : ''}
       onError={(event) => { event.currentTarget.remove() }}

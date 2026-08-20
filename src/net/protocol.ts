@@ -1,3 +1,3 @@
 export type {
-  ClientCommand, ServerEvent, RejectCode, PlayerView, PublicSettlement,
+  ClientCommand, ServerEvent, RejectCode, PlayerView, PublicSettlement, RoomPreview,
 } from '../types.ts'

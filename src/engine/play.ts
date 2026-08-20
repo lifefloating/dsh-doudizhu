@@ -1,8 +1,8 @@
 import {
   asHandId, decksFor, nextSeat, type BidAction, type BidScore, type CardId,
-  type DoubleAction, type Hand, type HandId, type Play, type RoomId, type Seat, type SeatCount,
+  type DoubleAction, type Hand, type HandId, type LegalCombo, type Play, type RoomId, type Seat, type SeatCount,
 } from '../types.ts'
-import { sortCards } from './cards.ts'
+import { cardValue, sortCards } from './cards.ts'
 import { dealCards, giveBottom, pickLaiZiRanks, randomSeat } from './deal.ts'
 import { beats, classify, enumerateLegal, smallestSolo, type ClassifiedHand } from './hands.ts'
 
@@ -21,7 +21,6 @@ export interface EngineState {
   called: boolean
   actedBid: boolean[]
   refusedCall: boolean[]
-  robBackDone: boolean
   highestBidder: Seat | null
   passesInRow: number
   doubleDeadlineAt: number
@@ -104,7 +103,6 @@ export function createHand(
     called: false,
     actedBid: Array.from({ length: seatCount }, () => false),
     refusedCall: Array.from({ length: seatCount }, () => false),
-    robBackDone: false,
     highestBidder: null,
     passesInRow: 0,
     doubleDeadlineAt: 0,
@@ -116,8 +114,7 @@ export function createHand(
 export function applyBid(state: EngineState, seat: Seat, action: BidAction): PlayResult {
   if (state.phase !== 'bidding') return { ok: false, code: 'phase', reason: 'not bidding' }
   if (state.bidTurn !== seat) return { ok: false, code: 'not-your-turn', reason: 'not your bid' }
-  const robBack = state.actedBid[seat] === true
-  if (robBack && action === 'call') return { ok: false, code: 'illegal', reason: 'already called' }
+  if (state.actedBid[seat]) return { ok: false, code: 'illegal', reason: 'already acted' }
   if (action === 'call') {
     if (state.called) return { ok: false, code: 'illegal', reason: 'already called' }
     state.called = true
@@ -139,8 +136,7 @@ export function applyBid(state: EngineState, seat: Seat, action: BidAction): Pla
     state.refusedCall[seat] = true
   }
   state.bids[seat] = action
-  if (robBack) state.robBackDone = true
-  else state.actedBid[seat] = true
+  state.actedBid[seat] = true
   const next = nextBidder(state, seat)
   if (next === null) {
     if (!state.called || state.highestBidder === null || state.hand.bid === 0) {
@@ -159,10 +155,10 @@ export function applyMingPai(state: EngineState, seat: Seat): PlayResult {
   if (state.phase === 'bidding' && state.hand.landlordSeat === null) {
     state.hand.mingPaiBySeat[seat] = true
     state.hand.mingPaiMult = Math.max(state.hand.mingPaiMult, 3)
-    if (!state.called && state.actedBid.every((acted) => !acted)) state.bidTurn = seat
     return { ok: true, play: dummyPlay(seat), emptied: false }
   }
-  if (state.phase === 'doubling' || state.phase === 'playing') {
+  if (state.phase === 'doubling') {
+    if (state.hand.landlordSeat !== seat) return { ok: false, code: 'illegal', reason: 'only landlord after bottom' }
     state.hand.mingPaiBySeat[seat] = true
     state.hand.mingPaiMult = Math.max(state.hand.mingPaiMult, 2)
     return { ok: true, play: dummyPlay(seat), emptied: false }
@@ -245,12 +241,36 @@ export function applyPass(state: EngineState, seat: Seat, seq: number, ts: strin
 export function autoTimeout(state: EngineState, seq: number, ts: string): PlayResult | null {
   if (state.phase !== 'playing') return null
   const seat = state.hand.turnSeat
-  if (state.hand.leadSeat === seat || currentLead(state) === null) {
-    const card = smallestSolo(state.hand.hands[seat] ?? [])
-    if (!card) return null
-    return applyPlay(state, seat, [card], seq, ts)
-  }
-  return applyPass(state, seat, seq, ts)
+  const legal = legalFor(state, seat)
+  const pick = pickAutoPlay(legal.combos)
+  if (pick) return applyPlay(state, seat, pick.cards, seq, ts)
+  if (legal.canPass) return applyPass(state, seat, seq, ts)
+  const card = smallestSolo(state.hand.hands[seat] ?? [])
+  if (!card) return null
+  return applyPlay(state, seat, [card], seq, ts)
+}
+
+/** Prefer the cheapest legal combo: fewest cards, then lowest rank, then simplest type. */
+export function pickAutoPlay(combos: readonly LegalCombo[]): LegalCombo | null {
+  if (combos.length === 0) return null
+  const ranked = [...combos].sort((a, b) => {
+    if (a.cards.length !== b.cards.length) return a.cards.length - b.cards.length
+    const aMin = Math.min(...a.cards.map(cardValue))
+    const bMin = Math.min(...b.cards.map(cardValue))
+    if (aMin !== bMin) return aMin - bMin
+    return comboTypeRank(a.type) - comboTypeRank(b.type)
+  })
+  return ranked[0] ?? null
+}
+
+function comboTypeRank(type: string): number {
+  const order = [
+    'solo', 'pair', 'trio', 'trioSolo', 'trioPair',
+    'seq', 'seqPair', 'plane', 'planeSolo', 'planePair',
+    'fourDualSolo', 'fourDualPair', 'bomb', 'rocket',
+  ]
+  const index = order.indexOf(type)
+  return index < 0 ? 99 : index
 }
 
 export function legalFor(state: EngineState, seat: Seat) {
@@ -297,22 +317,7 @@ function nextBidder(state: EngineState, from: Seat): Seat | null {
     if (!state.actedBid[seat]) return seat
     seat = nextSeat(seat, state.seatCount)
   }
-  const caller = firstCaller(state)
-  if (
-    state.called
-    && !state.robBackDone
-    && caller !== null
-    && state.highestBidder !== caller
-    && !state.refusedCall[caller]
-  ) {
-    return caller
-  }
   return null
-}
-
-function firstCaller(state: EngineState): Seat | null {
-  const index = state.bids.findIndex((bid) => bid === 'call')
-  return index >= 0 ? index as Seat : null
 }
 
 function lockLandlord(state: EngineState, seat: Seat, bid: BidScore): void {

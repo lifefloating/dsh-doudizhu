@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_STAKE_M, DEFAULT_WELCOME_ATOMS } from '../settle/math.ts'
-import type { CardId, ClientCommand, PlayerView, SeatCount } from '../types.ts'
-import { connectChannel, createRoom, joinRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
-import { RoomCodeBar } from './InviteDialog.tsx'
+import type { CardId, ClientCommand, PlayerView, RoomPreview, SeatCount } from '../types.ts'
+import { connectChannel, createRoom, joinRoom, peekRoom, sendCommand, type CreateRoomResponse } from './host-api.ts'
 import { LobbyView } from './LobbyView.tsx'
+import { RoomPreviewCard } from './RoomPreviewCard.tsx'
 import { SettlementView } from './SettlementView.tsx'
 import { emptyState, toggleCard } from './store.ts'
 import { TableView } from './TableView.tsx'
@@ -19,9 +19,11 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   const [joinCode, setJoinCode] = useState('')
   const [joinInvite, setJoinInvite] = useState('')
   const [joinName, setJoinName] = useState('好友')
+  const [preview, setPreview] = useState<RoomPreview | null>(null)
   const [state, setState] = useState(emptyState)
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [roomId, setRoomId] = useState<string | null>(null)
   const seq = useMemo(() => ({ value: 0 }), [])
 
@@ -69,6 +71,18 @@ export function HostApp({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const loadPreview = async (): Promise<void> => {
+    setPreviewing(true)
+    setState((prev) => ({ ...prev, error: null }))
+    try {
+      setPreview(await peekRoom({ roomCode: joinCode.trim(), invite: joinInvite.trim() }))
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'preview failed' }))
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   const enterRoom = async (): Promise<void> => {
     setJoining(true)
     setState((prev) => ({ ...prev, error: null }))
@@ -77,10 +91,11 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         roomCode: joinCode.trim(),
         invite: joinInvite.trim(),
         displayName: joinName,
-        role: 'sit',
+        role: preview && !preview.canSit ? 'watch' : 'sit',
       })
       setRoomId(result.roomId)
       applyView(result.view)
+      setPreview(null)
       setState((prev) => ({ ...prev, roomCode: result.view.room.roomCode }))
       location.hash = `#/doudizhu/room/${result.roomId}`
       listenRoom(result.roomId, result.wsTicket)
@@ -100,6 +115,12 @@ export function HostApp({ onClose }: { onClose: () => void }) {
       if (event.type === 'settled') {
         seq.value = event.seq
         setState((prev) => ({ ...prev, settlement: event.settlement }))
+      }
+      if (event.type === 'kicked') {
+        setRoomId(null)
+        setPreview(null)
+        setState({ ...emptyState(), error: '房主把你踢出了房间' })
+        location.hash = '#/doudizhu'
       }
       if (event.type === 'reject') {
         setState((prev) => ({ ...prev, error: event.reason }))
@@ -122,7 +143,23 @@ export function HostApp({ onClose }: { onClose: () => void }) {
       </div>
       {state.error ? <div className={css.banner}>{state.error}</div> : null}
       {!state.view
-        ? (
+        ? preview
+          ? (
+            <div className={css.lobby}>
+              <div className={css.card}>
+                <RoomPreviewCard
+                  preview={preview}
+                  name={joinName}
+                  onName={setJoinName}
+                  onConfirm={() => { void enterRoom() }}
+                  onBack={() => { setPreview(null) }}
+                  confirming={joining}
+                  error={state.error}
+                />
+              </div>
+            </div>
+          )
+          : (
           <LobbyView
             tab={tab}
             onTab={setTab}
@@ -148,14 +185,14 @@ export function HostApp({ onClose }: { onClose: () => void }) {
               code: joinCode,
               invite: joinInvite,
               name: joinName,
-              joining,
+              joining: previewing,
               onCode: setJoinCode,
               onInvite: setJoinInvite,
               onName: setJoinName,
-              onJoin: () => { void enterRoom() },
+              onJoin: () => { void loadPreview() },
             }}
           />
-        )
+          )
         : state.settlement && state.view.room.phase === 'waiting'
           ? (
             <SettlementView
@@ -167,34 +204,29 @@ export function HostApp({ onClose }: { onClose: () => void }) {
             />
           )
           : (
-            <>
-              {state.roomCode
-                ? (
-                  <div className={css.banner}>
-                    <RoomCodeBar
-                      title={state.view.room.title}
-                      roomCode={state.roomCode}
-                      sitUrl={state.sitUrl}
-                      shareable={state.shareable}
-                      canRename
-                      onRename={(next) => { command({ type: 'rename', title: next }) }}
-                    />
-                  </div>
-                )
-                : null}
-              <TableView
-                view={state.view}
-                selected={state.selected}
-                onToggle={(card: CardId) => { setState((prev) => ({ ...prev, selected: toggleCard(prev.selected, card) })) }}
-                onBid={(action) => { command({ type: 'bid', action }) }}
-                onDouble={(action) => { command({ type: 'double', action }) }}
-                onMingPai={() => { command({ type: 'mingPai' }) }}
-                onPlay={() => { command({ type: 'play', cards: state.selected, nonce: crypto.randomUUID() }) }}
-                onPass={() => { command({ type: 'pass', nonce: crypto.randomUUID() }) }}
-                onReady={(ready) => { command({ type: 'ready', ready }) }}
-                onChat={(text) => { command({ type: 'chat', text }) }}
-              />
-            </>
+            <TableView
+              view={state.view}
+              selected={state.selected}
+              onToggle={(card: CardId) => { setState((prev) => ({ ...prev, selected: toggleCard(prev.selected, card) })) }}
+              onBid={(action) => { command({ type: 'bid', action }) }}
+              onDouble={(action) => { command({ type: 'double', action }) }}
+              onMingPai={() => { command({ type: 'mingPai' }) }}
+              onPlay={(cards) => {
+                const next = cards && cards.length > 0 ? [...cards] : state.selected
+                if (next.length === 0) return
+                command({ type: 'play', cards: next, nonce: crypto.randomUUID() })
+              }}
+              onPass={() => { command({ type: 'pass', nonce: crypto.randomUUID() }) }}
+              onReady={(ready) => { command({ type: 'ready', ready }) }}
+              onStart={() => { command({ type: 'start' }) }}
+              onKick={(playerId) => { command({ type: 'hostKick', playerId }) }}
+              onChat={(text) => { command({ type: 'chat', text }) }}
+              roomCode={state.roomCode}
+              sitUrl={state.sitUrl}
+              shareable={state.shareable}
+              canRename
+              onRename={(next) => { command({ type: 'rename', title: next }) }}
+            />
           )}
     </div>
   )

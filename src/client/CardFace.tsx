@@ -1,4 +1,5 @@
 import type { CardId } from '../types.ts'
+import { jokerTone } from './card-motion.ts'
 import css from './styles.module.css'
 
 const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', C: '♣', D: '♦' }
@@ -32,15 +33,18 @@ export function CardFace({
 }) {
   const raw = cardBase(card)
   const wild = isWildCard(card, laiZiRanks)
-  if (raw === 'BJ' || raw === 'RJ' || rankOf(card) === 'BJ' || rankOf(card) === 'RJ') {
-    const red = rankOf(card) === 'RJ'
+  const joker = jokerTone(card)
+  if (joker) {
+    const red = joker === 'red'
     return (
-      <div className={`${css.cardFace} ${css.jokerFace} ${red ? css.red : ''} ${selected ? css.selected : ''}`}>
+      <div className={`${css.cardFace} ${css.jokerFace} ${red ? css.red : css.blackJoker} ${selected ? css.selected : ''}`}>
+        <span className={css.jokerWord} aria-hidden="true">JOKER</span>
         <img
           className={css.jokerArt}
           src={red ? `${ASSET}/joker-red.png` : `${ASSET}/joker-black.png`}
-          alt=""
+          alt={red ? '红Joker' : '黑Joker'}
         />
+        <span className={`${css.jokerWord} ${css.jokerWordEnd}`} aria-hidden="true">JOKER</span>
       </div>
     )
   }

@@ -42,6 +42,7 @@ export interface SeatState {
   readonly avatarUrl: string | null
   readonly ready: boolean
   readonly connected: boolean
+  readonly autoPlay: boolean
   readonly role: 'empty' | 'farmer' | 'landlord'
   readonly grantId: GrantId | null
   readonly cardsLeft: number
@@ -169,10 +170,33 @@ export interface TokenGrant {
   readonly issuedBy: 'room-host'
 }
 
+export interface RoomPreviewSeat {
+  readonly seat: Seat
+  readonly displayName: string | null
+  readonly ready: boolean
+  readonly host: boolean
+}
+
+export interface RoomPreview {
+  readonly roomCode: string
+  readonly title: string
+  readonly hostDisplayName: string
+  readonly seatCount: SeatCount
+  readonly laiZi: boolean
+  readonly stakeAtoms: TokenAtomString
+  readonly maxMultiplier: number
+  readonly phase: RoomPhase
+  readonly seated: number
+  readonly seats: readonly RoomPreviewSeat[]
+  readonly canSit: boolean
+  readonly inviteExpiresAt: string
+}
+
 export type ClientCommand =
   | { type: 'sit'; seat: Seat; displayName: string }
   | { type: 'stand' }
   | { type: 'ready'; ready: boolean }
+  | { type: 'start' }
   | { type: 'bid'; action: BidAction; score?: BidScore }
   | { type: 'double'; action: DoubleAction }
   | { type: 'mingPai' }
@@ -189,6 +213,7 @@ export type ServerEvent =
   | { type: 'snapshot'; seq: number; view: PlayerView }
   | { type: 'reject'; nonce?: string; code: RejectCode; reason: string }
   | { type: 'settled'; seq: number; settlement: PublicSettlement }
+  | { type: 'kicked'; seq: number; reason: string }
   | { type: 'pong'; ts: number }
 
 export class CommandError extends Error {

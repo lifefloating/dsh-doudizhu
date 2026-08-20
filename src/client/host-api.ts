@@ -1,4 +1,4 @@
-import type { ClientCommand, PlayerView, PublicSettlement, ServerEvent } from '../types.ts'
+import type { ClientCommand, PlayerView, PublicSettlement, RoomPreview, ServerEvent } from '../types.ts'
 
 const PREFIX = '/doudizhu'
 
@@ -51,6 +51,14 @@ export function createRoom(input: {
   return request<CreateRoomResponse>('/api/rooms', { method: 'POST', body: JSON.stringify(input) })
 }
 
+export function peekRoom(input: { roomCode: string; invite: string }) {
+  const query = new URLSearchParams({
+    code: input.roomCode,
+    invite: input.invite,
+  })
+  return request<RoomPreview>(`/api/preview?${query.toString()}`)
+}
+
 export function joinRoom(input: { roomCode: string; invite: string; displayName: string; role: 'sit' | 'watch' }) {
   return request<JoinResponse>('/api/join', { method: 'POST', body: JSON.stringify(input) })
 }
@@ -76,8 +84,15 @@ export function connectChannel(
   let closed = false
   let ws: WebSocket | null = null
   let poll: ReturnType<typeof setInterval> | undefined
+  let ping: ReturnType<typeof setInterval> | undefined
   try {
     ws = new WebSocket(`${proto}://${location.host}${PREFIX}/ws?ticket=${encodeURIComponent(ticket)}`, 'doudizhu.v1')
+    ws.onopen = () => {
+      ping = setInterval(() => {
+        if (closed || !ws || ws.readyState !== WebSocket.OPEN) return
+        ws.send(JSON.stringify({ type: 'ping' }))
+      }, 15_000)
+    }
     ws.onmessage = (event) => {
       try { onEvent(JSON.parse(String(event.data)) as ServerEvent) } catch { /* ignore */ }
     }
@@ -88,6 +103,8 @@ export function connectChannel(
   }
   function startPoll(): void {
     if (poll || closed) return
+    if (ping) clearInterval(ping)
+    ping = undefined
     poll = setInterval(() => {
       void fetchSince(fallback.roomId, fallback.seq()).then((body) => {
         for (const event of body.events) onEvent(event)
@@ -98,7 +115,8 @@ export function connectChannel(
     closed = true
     ws?.close()
     if (poll) clearInterval(poll)
+    if (ping) clearInterval(ping)
   }
 }
 
-export type { PlayerView, PublicSettlement, ServerEvent }
+export type { PlayerView, PublicSettlement, RoomPreview, ServerEvent }

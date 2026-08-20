@@ -6,17 +6,17 @@ import {
 import { scoreHand } from '../engine/score.ts'
 import { rankOf } from '../engine/cards.ts'
 import { newPlayerId, sanitizeAvatarUrl, sanitizeDisplayName, sanitizeRoomTitle } from '../identity/player.ts'
-import { MAX_CHAT, MAX_SPECTATORS } from '../invariant.ts'
+import { AUTO_PLAY_MS, dealAnimationMs, MAX_CHAT, MAX_SPECTATORS } from '../invariant.ts'
 import { createMemoryDomain, openDoudizhuDomain, type DomainLike } from '../persist/domain.ts'
 import { createCounters, type HealthCounters } from '../settle/audit.ts'
 import { issueHostGrant, persistGrant } from '../settle/grant.ts'
 import { Ledger } from '../settle/ledger.ts'
 import { seatCapAtoms } from '../settle/math.ts'
 import {
-  asRoomId, asTokenAtomString, dealtHandSize, decksFor, landlordHandSize, nextSeat, parseAtoms, prevSeat,
+  asRoomId, asTokenAtomString, dealtHandSize, decksFor, landlordHandSize, nextSeat, parseAtoms,
   type BidAction, type CardId, type ClientCommand, type DoubleAction, type PlayerId, type PlayerView,
-  type PublicSettlement, type RejectCode, type Room, type RoomId, type Seat, type SeatCount, type SeatState,
-  type ServerEvent,
+  type PublicSettlement, type RejectCode, type Room, type RoomId, type RoomPreview, type Seat, type SeatCount,
+  type SeatState, type ServerEvent,
 } from '../types.ts'
 import { assertCreateEconomy, resolveConfig, validatePublicBaseUrl, type PluginConfig, type ResolvedConfig } from '../config.ts'
 
@@ -81,6 +81,7 @@ interface LiveRoom {
   watchToken: string
   sitConsumed: boolean
   lastLandlordSeat: Seat | null
+  preDealMing: Set<Seat>
   engine: EngineState | null
   deadlineAt: number | null
   seq: number
@@ -205,6 +206,7 @@ export class RoomManager {
       watchToken,
       sitConsumed: false,
       lastLandlordSeat: null,
+      preDealMing: new Set(),
       engine: null,
       deadlineAt: null,
       seq: 0,
@@ -228,7 +230,7 @@ export class RoomManager {
       kind: 'host',
       expiresAt: Date.now() + 86_400_000,
     })
-    await this.sitInternal(live, hostPlayerId, 0, displayName, true)
+    await this.sitInternal(live, hostPlayerId, 0, displayName)
     const origin = publicBase || `http://127.0.0.1:${this.listenPort()}`
     return {
       roomId,
@@ -263,10 +265,9 @@ export class RoomManager {
     const canSit = live.room.phase === 'waiting' && empty !== null && req.role !== 'watch'
     let seat: Seat | null = null
     if (canSit) {
-      await this.sitInternal(live, playerId, empty, displayName, true)
+      await this.sitInternal(live, playerId, empty, displayName)
       seat = empty
       if (this.firstEmptySeat(live) === null) live.sitConsumed = true
-      await this.maybeDeal(live)
     } else {
       if (!this.config.allowSpectators) throw fail('auth', 'spectators disabled')
       live.sitConsumed = live.sitConsumed || empty === null || live.room.phase !== 'waiting'
@@ -319,6 +320,22 @@ export class RoomManager {
     return this.viewFor(this.requireRoom(roomId), playerId)
   }
 
+  async peek(req: { roomCode: string; invite: string; local?: boolean }): Promise<RoomPreview> {
+    await this.ready()
+    const live = this.roomByCode(req.roomCode)
+    if (!live || live.room.phase === 'closed') throw fail('expired', 'room not found')
+    if (Date.parse(live.room.inviteExpiresAt) < Date.now()) throw fail('expired', 'invite expired')
+    const invite = req.invite.trim()
+    const sitOk = invite
+      ? sha256Hex(`${live.secret}|sit|${invite}`) === live.sitInviteHash
+      : Boolean(req.local)
+    const watchOk = invite
+      ? sha256Hex(`${live.secret}|watch|${invite}`) === live.watchInviteHash
+      : false
+    if (!sitOk && !watchOk) throw fail('auth', invite ? 'invalid invite' : 'room not found')
+    return this.previewOf(live, sitOk)
+  }
+
   eventsSince(roomId: RoomId, playerId: PlayerId, seq: number): { events: ServerEvent[]; untilSeq: number } {
     const live = this.requireRoom(roomId)
     const events: ServerEvent[] = []
@@ -339,9 +356,12 @@ export class RoomManager {
         if (live.nonces.has(command.nonce)) throw fail('duplicate-nonce', 'duplicate play nonce')
         live.nonces.add(command.nonce)
       }
+      if (live.room.phase === 'dealing' && command.type !== 'chat' && command.type !== 'ping' && command.type !== 'mingPai') {
+        throw fail('phase', 'dealing')
+      }
       switch (command.type) {
         case 'sit':
-          await this.sitInternal(live, playerId, command.seat, sanitizeDisplayName(command.displayName), false)
+          await this.sitInternal(live, playerId, command.seat, sanitizeDisplayName(command.displayName))
           break
         case 'stand':
           this.stand(live, playerId)
@@ -349,10 +369,15 @@ export class RoomManager {
         case 'ready':
           await this.setReady(live, playerId, command.ready)
           break
+        case 'start':
+          await this.startHand(live, playerId, isHost)
+          break
         case 'bid':
+          this.clearAutoPlay(live, playerId)
           this.bid(live, playerId, command.action)
           break
         case 'double':
+          this.clearAutoPlay(live, playerId)
           this.double(live, playerId, command.action)
           break
         case 'mingPai':
@@ -362,9 +387,11 @@ export class RoomManager {
           this.rename(live, playerId, command.title, isHost)
           break
         case 'play':
+          this.clearAutoPlay(live, playerId)
           this.play(live, playerId, command.cards)
           break
         case 'pass':
+          this.clearAutoPlay(live, playerId)
           this.pass(live, playerId)
           break
         case 'chat':
@@ -395,13 +422,18 @@ export class RoomManager {
     }
   }
 
-  markConnected(playerId: PlayerId, roomId: RoomId): void {
+  markConnected(playerId: PlayerId, roomId: RoomId, resume = false): void {
     const live = this.rooms.get(roomId)
     if (!live) return
+    const seat = this.seatOf(live, playerId)
+    const wasOffline = live.disconnectedAt.has(playerId) || (seat !== null && live.room.seats[seat]?.connected === false)
     live.disconnectedAt.delete(playerId)
-    live.autoPlay.delete(this.seatOf(live, playerId) ?? 0)
+    if (!resume && seat !== null) {
+      live.autoPlay.delete(seat)
+      this.patchSeat(live, seat, { autoPlay: false })
+    }
     this.setConnected(live, playerId, true)
-    this.broadcast(live)
+    if (wasOffline) this.broadcast(live)
   }
 
   markDisconnected(playerId: PlayerId, roomId: RoomId): void {
@@ -409,10 +441,20 @@ export class RoomManager {
     if (!live) return
     live.disconnectedAt.set(playerId, Date.now())
     this.setConnected(live, playerId, false)
+    const seat = this.seatOf(live, playerId)
+    if (seat !== null && this.inHand(live)) {
+      live.autoPlay.add(seat)
+      if (this.isTurnSeat(live, seat)) live.deadlineAt = Date.now() + AUTO_PLAY_MS
+    }
     this.broadcast(live)
   }
 
   listenPort = (): number => this.ctx?.webServer?.port ?? 3080
+
+  /** Test hook: advance room timers without waiting on the real interval. */
+  tickForTest(now = Date.now()): void {
+    this.onTick(now)
+  }
 
   private async hydrate(storage: unknown): Promise<void> {
     const opened = await openDoudizhuDomain(storage)
@@ -451,7 +493,7 @@ export class RoomManager {
     live.room = { ...live.room, spectatorIds: [...live.room.spectatorIds, playerId] }
   }
 
-  private async sitInternal(live: LiveRoom, playerId: PlayerId, seat: Seat, displayName: string, isHost: boolean): Promise<void> {
+  private async sitInternal(live: LiveRoom, playerId: PlayerId, seat: Seat, displayName: string): Promise<void> {
     if (live.room.phase !== 'waiting') throw fail('phase', 'cannot sit now')
     const target = live.room.seats[seat]
     if (!target) throw fail('illegal', 'no such seat')
@@ -460,8 +502,8 @@ export class RoomManager {
     const cap = seatCapAtoms(live.room.stakeAtoms, live.room.maxMultiplier, live.room.seatCount)
     const grant = issueHostGrant(playerId, live.room.roomId, cap)
     await persistGrant(this.domain, grant)
-    const ready = isHost || live.room.phase === 'waiting'
-    if (ready && this.ledger.getEscrow(playerId) < cap) {
+    const host = live.room.hostPlayerId === playerId
+    if (this.ledger.getEscrow(playerId) < cap) {
       if (this.ledger.getAvailable(playerId) < cap) throw fail('insufficient', 'need more welcome atoms')
       await this.ledger.freeze(playerId, cap, live.room.roomId)
     }
@@ -471,8 +513,9 @@ export class RoomManager {
           playerId,
           displayName,
           avatarUrl: null,
-          ready,
+          ready: host,
           connected: true,
+          autoPlay: false,
           role: 'empty' as const,
           grantId: grant.grantId,
           cardsLeft: 0,
@@ -487,6 +530,8 @@ export class RoomManager {
 
   private stand(live: LiveRoom, playerId: PlayerId, persist = true): void {
     if (live.room.phase !== 'waiting' && persist) throw fail('phase', 'cannot stand now')
+    const seated = live.room.seats.find((item) => item.playerId === playerId)
+    if (seated) live.preDealMing.delete(seated.seat)
     const seats = live.room.seats.map((item) => item.playerId === playerId ? emptySeat(item.seat) : item)
     live.room = { ...live.room, seats }
     live.sitConsumed = live.room.phase !== 'waiting' || this.firstEmptySeat(live) === null
@@ -499,37 +544,65 @@ export class RoomManager {
     if (live.room.phase !== 'waiting') throw fail('phase', 'not waiting')
     const seat = this.seatOf(live, playerId)
     if (seat === null) throw fail('illegal', 'not seated')
+    if (live.room.hostPlayerId === playerId) throw fail('illegal', 'host starts the hand')
     if (ready) {
       const cap = seatCapAtoms(live.room.stakeAtoms, live.room.maxMultiplier, live.room.seatCount)
       if (this.ledger.getAvailable(playerId) < cap) throw fail('insufficient', 'need more welcome atoms')
       if (this.ledger.getEscrow(playerId) < cap) await this.ledger.freeze(playerId, cap, live.room.roomId)
-    } else if (this.ledger.getEscrow(playerId) > 0n) {
-      await this.ledger.unfreeze(playerId, this.ledger.getEscrow(playerId), live.room.roomId)
     }
     this.patchSeat(live, seat, { ready })
-    await this.maybeDeal(live)
   }
 
-  private async maybeDeal(live: LiveRoom): Promise<void> {
+  private async startHand(live: LiveRoom, playerId: PlayerId, isHost: boolean): Promise<void> {
+    if (!isHost && live.room.hostPlayerId !== playerId) throw fail('auth', 'host only')
+    if (live.room.phase !== 'waiting') throw fail('phase', 'not waiting')
     const seated = live.room.seats
-    if (!seated.every((seat) => seat.playerId && seat.ready && seat.grantId)) return
-    const dealer = live.lastLandlordSeat === null ? null : nextSeat(live.lastLandlordSeat, live.room.seatCount)
+    if (!seated.every((seat) => seat.playerId && seat.grantId)) throw fail('phase', 'need a full table')
+    if (!seated.every((seat) => seat.playerId === live.room.hostPlayerId || seat.ready)) {
+      throw fail('phase', 'guests are not ready')
+    }
+    this.beginDeal(live, live.lastLandlordSeat === null ? null : nextSeat(live.lastLandlordSeat, live.room.seatCount))
+  }
+
+  private beginDeal(live: LiveRoom, dealer: Seat | null): void {
     live.engine = createHand(live.room.roomId, dealer, this.counters.handsStarted + 1, {
       seatCount: live.room.seatCount,
       laiZi: live.room.laiZi,
     })
+    this.applyPreDealMing(live)
     this.counters.bump('handsStarted')
     live.room = {
       ...live.room,
-      phase: 'bidding',
+      phase: 'dealing',
       currentHandId: live.engine.hand.handId,
-      seats: seated.map((seat) => ({
+      seats: live.room.seats.map((seat) => ({
         ...seat,
         role: 'farmer' as const,
         cardsLeft: dealtHandSize(live.room.seatCount),
       })),
     }
-    live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+    const ms = this.config.dealAnimMs ?? dealAnimationMs(live.room.seatCount)
+    live.deadlineAt = Date.now() + ms
+    if (ms <= 0) this.finishDeal(live)
+  }
+
+  private applyPreDealMing(live: LiveRoom): void {
+    const engine = live.engine
+    if (!engine || live.preDealMing.size === 0) return
+    let first: Seat | null = null
+    for (const seat of live.preDealMing) {
+      if (first === null) first = seat
+      engine.hand.mingPaiBySeat[seat] = true
+      engine.hand.mingPaiMult = Math.max(engine.hand.mingPaiMult, 5)
+    }
+    if (first !== null) engine.bidTurn = first
+    live.preDealMing.clear()
+  }
+
+  private finishDeal(live: LiveRoom): void {
+    if (live.room.phase !== 'dealing' || !live.engine) return
+    live.room = { ...live.room, phase: 'bidding' }
+    live.deadlineAt = Date.now() + this.turnMs(live)
   }
 
   private bid(live: LiveRoom, playerId: PlayerId, action: BidAction): void {
@@ -538,14 +611,7 @@ export class RoomManager {
     const result = applyBid(engine, seat, action)
     if (!result.ok) throw fail(result.code, result.reason)
     if (engine.phase === 'redeal') {
-      const dealer = engine.hand.dealerSeat
-      live.engine = createHand(live.room.roomId, dealer, this.counters.handsStarted + 1, {
-        seatCount: live.room.seatCount,
-        laiZi: live.room.laiZi,
-      })
-      this.counters.bump('handsStarted')
-      live.room = { ...live.room, currentHandId: live.engine.hand.handId, phase: 'bidding' }
-      live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+      this.beginDeal(live, engine.hand.dealerSeat)
       return
     }
     if (engine.phase === 'doubling' && engine.hand.landlordSeat !== null) {
@@ -559,8 +625,19 @@ export class RoomManager {
   }
 
   private mingPai(live: LiveRoom, playerId: PlayerId): void {
-    if (!live.engine) throw fail('phase', 'no hand')
     const seat = this.requireSeat(live, playerId)
+    if (live.room.phase === 'waiting') {
+      if (live.preDealMing.has(seat)) throw fail('illegal', 'already ming pai')
+      live.preDealMing.add(seat)
+      return
+    }
+    if (!live.engine) throw fail('phase', 'no hand')
+    if (live.engine.hand.mingPaiBySeat[seat]) throw fail('illegal', 'already ming pai')
+    if (live.room.phase === 'dealing') {
+      live.engine.hand.mingPaiBySeat[seat] = true
+      live.engine.hand.mingPaiMult = Math.max(live.engine.hand.mingPaiMult, 4)
+      return
+    }
     const result = applyMingPai(live.engine, seat)
     if (!result.ok) throw fail(result.code, result.reason)
   }
@@ -578,7 +655,7 @@ export class RoomManager {
     if (!result.ok) throw fail(result.code, result.reason)
     if (engine.phase === 'playing') {
       live.room = { ...live.room, phase: 'playing' }
-      live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+      live.deadlineAt = Date.now() + this.turnMs(live)
     }
   }
 
@@ -589,7 +666,7 @@ export class RoomManager {
     if (!result.ok) throw fail(result.code, result.reason)
     this.patchSeat(live, seat, { cardsLeft: engine.hand.hands[seat]?.length ?? 0 })
     if (engine.phase === 'settled') void this.settle(live)
-    else live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+    else live.deadlineAt = Date.now() + this.turnMs(live)
   }
 
   private pass(live: LiveRoom, playerId: PlayerId): void {
@@ -597,7 +674,7 @@ export class RoomManager {
     const seat = this.requireSeat(live, playerId)
     const result = applyPass(engine, seat, live.seq + 1, nowIso())
     if (!result.ok) throw fail(result.code, result.reason)
-    live.deadlineAt = Date.now() + this.config.turnTimeoutMs
+    live.deadlineAt = Date.now() + this.turnMs(live)
   }
 
   private chat(live: LiveRoom, playerId: PlayerId, text: string): void {
@@ -612,16 +689,36 @@ export class RoomManager {
     if (live.room.phase !== 'waiting') throw fail('phase', 'not waiting')
     const seated = this.seatOf(live, playerId) !== null || live.room.hostPlayerId === playerId
     if (!seated) throw fail('illegal', 'not seated')
-    for (const seat of live.room.seats) {
-      if (seat.playerId) await this.setReady(live, seat.playerId, true)
+    live.room = {
+      ...live.room,
+      seats: live.room.seats.map((seat) => ({
+        ...seat,
+        ready: seat.playerId === live.room.hostPlayerId,
+      })),
     }
   }
 
   private kick(live: LiveRoom, playerId: PlayerId): void {
     if (live.room.phase !== 'waiting') throw fail('phase', 'cannot kick now')
+    if (playerId === live.room.hostPlayerId) throw fail('illegal', 'cannot kick host')
+    const seated = this.seatOf(live, playerId) !== null || live.room.spectatorIds.includes(playerId)
+    if (!seated) throw fail('illegal', 'player not in room')
     this.stand(live, playerId)
     live.room = { ...live.room, spectatorIds: live.room.spectatorIds.filter((id) => id !== playerId) }
+    this.dropSession(playerId, live.room.roomId)
+    this.emit(live, { type: 'kicked', seq: live.seq + 1, reason: 'host kicked' }, playerId)
     void this.persistRoom(live)
+  }
+
+  private dropSession(playerId: PlayerId, roomId: RoomId): void {
+    for (const [cookie, session] of this.sessions) {
+      if (session.playerId === playerId && session.roomId === roomId) this.sessions.delete(cookie)
+    }
+    for (const [ticket, found] of this.tickets) {
+      if (found.playerId === playerId && found.roomId === roomId) this.tickets.delete(ticket)
+    }
+    const live = this.rooms.get(roomId)
+    live?.disconnectedAt.delete(playerId)
   }
 
   private async closeRoom(live: LiveRoom): Promise<void> {
@@ -694,6 +791,7 @@ export class RoomManager {
     live.lastLandlordSeat = landlord
     this.counters.bump('settlementsCommitted')
     live.engine = null
+    live.autoPlay.clear()
     live.room = {
       ...live.room,
       phase: 'waiting',
@@ -703,10 +801,56 @@ export class RoomManager {
         ready: false,
         role: 'empty' as const,
         cardsLeft: 0,
+        autoPlay: false,
       })),
     }
     live.deadlineAt = null
     this.push(live, { type: 'settled', seq: ++live.seq, settlement: publicSettlement })
+  }
+
+  private onTurnTimeout(live: LiveRoom, now: number): void {
+    const engine = live.engine
+    if (!engine) return
+    if (live.room.phase === 'playing') {
+      const timedOut = engine.hand.turnSeat
+      this.enterAutoPlay(live, timedOut)
+      const result = autoTimeout(engine, live.seq + 1, nowIso())
+      if (!result?.ok) {
+        live.deadlineAt = now + this.turnMs(live)
+        return
+      }
+      this.patchSeat(live, timedOut, { cardsLeft: engine.hand.hands[timedOut]?.length ?? 0 })
+      if (engine.phase === 'settled') void this.settle(live)
+      else live.deadlineAt = now + this.turnMs(live)
+      this.broadcast(live)
+      return
+    }
+    if (live.room.phase === 'bidding') {
+      const seat = engine.bidTurn
+      this.enterAutoPlay(live, seat)
+      const result = applyBid(engine, seat, 'pass')
+      if (!result.ok) {
+        live.deadlineAt = now + this.turnMs(live)
+        return
+      }
+      if (engine.phase === 'redeal') {
+        this.beginDeal(live, engine.hand.dealerSeat)
+        this.broadcast(live)
+        return
+      }
+      if (engine.phase === 'doubling' && engine.hand.landlordSeat !== null) {
+        this.patchSeat(live, engine.hand.landlordSeat, {
+          role: 'landlord',
+          cardsLeft: landlordHandSize(live.room.seatCount),
+        })
+        live.room = { ...live.room, phase: 'doubling' }
+        live.deadlineAt = engine.doubleDeadlineAt
+        this.broadcast(live)
+        return
+      }
+      live.deadlineAt = now + this.turnMs(live)
+      this.broadcast(live)
+    }
   }
 
   private async voidHand(live: LiveRoom): Promise<void> {
@@ -714,50 +858,38 @@ export class RoomManager {
       if (seat.playerId) await this.ledger.unfreeze(seat.playerId, this.ledger.getEscrow(seat.playerId), live.room.roomId, 'void')
     }
     live.engine = null
+    live.autoPlay.clear()
     live.room = {
       ...live.room,
       phase: 'waiting',
       currentHandId: null,
-      seats: live.room.seats.map((seat) => ({ ...seat, ready: false, role: 'empty' as const, cardsLeft: 0 })),
+      seats: live.room.seats.map((seat) => ({
+        ...seat,
+        ready: false,
+        role: 'empty' as const,
+        cardsLeft: 0,
+        autoPlay: false,
+      })),
     }
     this.counters.bump('handsVoided')
   }
 
   private onTick(now: number): void {
     for (const live of this.rooms.values()) {
+      if (live.room.phase === 'dealing' && live.deadlineAt && now >= live.deadlineAt) {
+        this.finishDeal(live)
+        this.broadcast(live)
+      }
       if (live.room.phase === 'doubling' && live.engine) {
         expireDoubling(live.engine, now)
         if (live.engine.phase === 'playing') {
           live.room = { ...live.room, phase: 'playing' }
-          live.deadlineAt = now + this.config.turnTimeoutMs
+          live.deadlineAt = now + this.turnMs(live)
           this.broadcast(live)
         }
       }
-      if (live.deadlineAt && now >= live.deadlineAt && live.engine && live.room.phase === 'playing') {
-        const result = autoTimeout(live.engine, live.seq + 1, nowIso())
-        if (result) {
-          const seat = live.engine.hand.turnSeat
-          const previous = prevSeat(seat, live.room.seatCount)
-          this.patchSeat(live, previous, { cardsLeft: live.engine.hand.hands[previous]!.length })
-          if (live.engine.phase === 'settled') void this.settle(live)
-          else live.deadlineAt = now + this.config.turnTimeoutMs
-          this.broadcast(live)
-        }
-      }
-      for (const [playerId, at] of live.disconnectedAt) {
-        if (now - at < this.config.reconnectWindowMs) continue
-        const seat = this.seatOf(live, playerId)
-        if (seat !== null && (live.room.phase === 'playing' || live.room.phase === 'bidding' || live.room.phase === 'doubling')) {
-          live.autoPlay.add(seat)
-        }
-      }
-      const seated = live.room.seats.filter((seat) => seat.playerId)
-      if (seated.length > 0 && seated.every((seat) => !seat.connected) && live.disconnectedAt.size === live.room.seatCount) {
-        const oldest = Math.min(...live.disconnectedAt.values())
-        if (now - oldest > this.config.reconnectWindowMs && live.engine) {
-          void this.voidHand(live)
-          this.broadcast(live)
-        }
+      if (live.deadlineAt && now >= live.deadlineAt && live.engine) {
+        this.onTurnTimeout(live, now)
       }
     }
   }
@@ -794,14 +926,72 @@ export class RoomManager {
     if (seat !== null) this.patchSeat(live, seat, { connected })
   }
 
+  private clearAutoPlay(live: LiveRoom, playerId: PlayerId): void {
+    const seat = this.seatOf(live, playerId)
+    if (seat === null || !live.autoPlay.has(seat)) return
+    live.autoPlay.delete(seat)
+    this.patchSeat(live, seat, { autoPlay: false })
+  }
+
+  private enterAutoPlay(live: LiveRoom, seat: Seat): void {
+    if (live.autoPlay.has(seat)) return
+    live.autoPlay.add(seat)
+    this.patchSeat(live, seat, { autoPlay: true })
+  }
+
+  private inHand(live: LiveRoom): boolean {
+    return live.room.phase === 'playing' || live.room.phase === 'bidding' || live.room.phase === 'doubling'
+  }
+
+  private isTurnSeat(live: LiveRoom, seat: Seat): boolean {
+    const engine = live.engine
+    if (!engine) return false
+    if (live.room.phase === 'bidding') return engine.bidTurn === seat
+    if (live.room.phase === 'playing') return engine.hand.turnSeat === seat
+    return false
+  }
+
+  private turnMs(live: LiveRoom): number {
+    const engine = live.engine
+    if (!engine) return this.config.turnTimeoutMs
+    const seat = live.room.phase === 'bidding' ? engine.bidTurn : engine.hand.turnSeat
+    return live.autoPlay.has(seat) ? AUTO_PLAY_MS : this.config.turnTimeoutMs
+  }
+
+  private previewOf(live: LiveRoom, sitOk: boolean): RoomPreview {
+    const empty = this.firstEmptySeat(live)
+    const hostName = live.room.seats.find((seat) => seat.playerId === live.room.hostPlayerId)?.displayName
+      ?? '房主'
+    return {
+      roomCode: live.room.roomCode,
+      title: live.room.title,
+      hostDisplayName: hostName,
+      seatCount: live.room.seatCount,
+      laiZi: live.room.laiZi,
+      stakeAtoms: asTokenAtomString(live.room.stakeAtoms),
+      maxMultiplier: live.room.maxMultiplier,
+      phase: live.room.phase,
+      seated: live.room.seats.filter((seat) => seat.playerId).length,
+      seats: live.room.seats.map((seat) => ({
+        seat: seat.seat,
+        displayName: seat.displayName,
+        ready: seat.ready,
+        host: seat.playerId === live.room.hostPlayerId,
+      })),
+      canSit: sitOk && live.room.phase === 'waiting' && empty !== null,
+      inviteExpiresAt: live.room.inviteExpiresAt,
+    }
+  }
+
   private viewFor(live: LiveRoom, playerId: PlayerId): PlayerView {
     const seat = this.seatOf(live, playerId)
     const spectator = seat === null
     const engine = live.engine
-    const cards = seat !== null && engine ? [...(engine.hand.hands[seat] ?? [])] : []
-    const legal = seat !== null && engine ? legalFor(engine, seat) : { canPass: false, combos: [] }
-    const bottomRevealed = Boolean(engine && engine.hand.landlordSeat !== null)
-    const remainingRanks = spectator && this.config.spectatorCardCounter
+    const dealing = live.room.phase === 'dealing'
+    const cards = seat !== null && engine && !dealing ? [...(engine.hand.hands[seat] ?? [])] : []
+    const legal = seat !== null && engine && !dealing ? legalFor(engine, seat) : { canPass: false, combos: [] }
+    const bottomRevealed = Boolean(engine && engine.hand.landlordSeat !== null && !dealing)
+    const remainingRanks = spectator && this.config.spectatorCardCounter && !dealing
       ? this.remainingRanks(live)
       : null
     return {
@@ -810,29 +1000,36 @@ export class RoomManager {
         stakeAtoms: asTokenAtomString(live.room.stakeAtoms),
         seats: live.room.seats.map((item) => ({
           ...item,
-          cardsLeft: engine ? (engine.hand.hands[item.seat]?.length ?? 0) : item.cardsLeft,
+          autoPlay: live.autoPlay.has(item.seat),
+          cardsLeft: dealing
+            ? 0
+            : engine ? (engine.hand.hands[item.seat]?.length ?? 0) : item.cardsLeft,
           role: engine?.hand.landlordSeat === item.seat
             ? 'landlord'
             : item.playerId
-              ? (engine ? 'farmer' : item.role)
+              ? (engine && !dealing ? 'farmer' : item.role)
               : 'empty',
         })),
       },
       you: { playerId, seat, spectator, cards },
       publicHands: live.room.seats.map((item, index) => (
-        engine ? (engine.hand.hands[index]?.length ?? 0) : item.cardsLeft
+        dealing ? 0 : engine ? (engine.hand.hands[index]?.length ?? 0) : item.cardsLeft
       )),
-      lastPlays: engine ? engine.hand.table.slice(-6) : [],
+      lastPlays: engine && !dealing ? engine.hand.table.slice(-6) : [],
       bottom: bottomRevealed && engine ? [...engine.hand.bottom] : null,
-      laiZiRanks: engine?.hand.laiZiRanks ?? [],
-      bid: engine?.hand.bid ?? 0,
-      auction: engine && engine.phase === 'bidding'
+      laiZiRanks: engine && !dealing ? engine.hand.laiZiRanks : [],
+      bid: engine && !dealing ? engine.hand.bid : 0,
+      auction: engine && engine.phase === 'bidding' && !dealing
         ? { kind: engine.called ? 'rob' : 'call', multiplier: Math.max(1, engine.hand.bid) }
         : null,
-      revealedBySeat: this.revealedHands(live),
-      mingPaiBySeat: engine ? { ...engine.hand.mingPaiBySeat } : {},
-      turnSeat: engine?.hand.turnSeat ?? null,
-      leadSeat: engine?.hand.leadSeat ?? null,
+      revealedBySeat: dealing ? {} : this.revealedHands(live),
+      mingPaiBySeat: this.mingPaiView(live),
+      turnSeat: dealing
+        ? null
+        : engine?.phase === 'bidding'
+          ? engine.bidTurn
+          : engine?.hand.turnSeat ?? null,
+      leadSeat: dealing ? null : engine?.hand.leadSeat ?? null,
       deadlineAt: live.deadlineAt ? new Date(live.deadlineAt).toISOString() : null,
       yourAvailableAtoms: asTokenAtomString(this.ledger.getAvailable(playerId)),
       yourEscrowAtoms: asTokenAtomString(this.ledger.getEscrow(playerId)),
@@ -840,6 +1037,12 @@ export class RoomManager {
       remainingRanks,
       chat: live.chat.slice(-20),
     }
+  }
+
+  private mingPaiView(live: LiveRoom): Partial<Record<Seat, boolean>> {
+    const out: Partial<Record<Seat, boolean>> = live.engine ? { ...live.engine.hand.mingPaiBySeat } : {}
+    for (const seat of live.preDealMing) out[seat] = true
+    return out
   }
 
   private revealedHands(live: LiveRoom): Partial<Record<Seat, CardId[]>> {
@@ -935,6 +1138,7 @@ function emptySeat(seat: Seat): SeatState {
     avatarUrl: null,
     ready: false,
     connected: false,
+    autoPlay: false,
     role: 'empty',
     grantId: null,
     cardsLeft: 0,

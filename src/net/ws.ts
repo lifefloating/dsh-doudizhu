@@ -26,10 +26,13 @@ export function registerDouDizhuSocket(server: WebServer, manager: RoomManager):
   })
   const heartbeat = setInterval(() => {
     const now = Date.now()
+    const limit = manager.getConfig().disconnectAfterMs
     for (const [ws, state] of sockets) {
-      if (now - state.lastSeen > manager.getConfig().disconnectAfterMs) {
-        ws.close()
+      if (now - state.lastSeen > limit) {
+        ws.terminate()
+        continue
       }
+      if (ws.readyState === WebSocket.OPEN) ws.ping()
     }
   }, manager.getConfig().heartbeatMs)
   if (typeof heartbeat === 'object' && 'unref' in heartbeat) heartbeat.unref()
@@ -56,8 +59,9 @@ export function registerDouDizhuSocket(server: WebServer, manager: RoomManager):
         const state: SocketState = { playerId: consumed.playerId, roomId: consumed.roomId, lastSeen: Date.now() }
         sockets.set(ws, state)
         manager.counters.wsConnected += 1
-        manager.markConnected(state.playerId, state.roomId)
+        manager.markConnected(state.playerId, state.roomId, true)
         send(ws, { type: 'snapshot', seq: 0, view: manager.view(state.roomId, state.playerId) })
+        ws.on('pong', () => { state.lastSeen = Date.now() })
         ws.on('message', (data) => {
           if (Buffer.byteLength(data.toString()) > MAX_FRAME_BYTES) {
             ws.close()
@@ -69,7 +73,8 @@ export function registerDouDizhuSocket(server: WebServer, manager: RoomManager):
         ws.on('close', () => {
           sockets.delete(ws)
           manager.counters.wsConnected = Math.max(0, manager.counters.wsConnected - 1)
-          manager.markDisconnected(state.playerId, state.roomId)
+          const stillOpen = [...sockets.values()].some((item) => item.playerId === state.playerId && item.roomId === state.roomId)
+          if (!stillOpen) manager.markDisconnected(state.playerId, state.roomId)
         })
       })
     },

@@ -139,6 +139,17 @@ async function handleApi(
     return
   }
 
+  if (req.method === 'GET' && path === '/api/preview') {
+    const loopback = isLoopbackHost(header(req, 'host'), req.socket.remoteAddress)
+    const preview = await manager.peek({
+      roomCode: String(url.searchParams.get('code') ?? ''),
+      invite: String(url.searchParams.get('invite') ?? ''),
+      local: loopback,
+    })
+    json(res, 200, preview)
+    return
+  }
+
   if (req.method === 'GET' && path === '/api/health') {
     if (!manager.isHostCookie(cookies.ddz_host)) throw Object.assign(new Error('host only'), { status: 403, code: 'auth' })
     json(res, 200, manager.health())
@@ -171,6 +182,7 @@ async function handleApi(
     return
   }
   if (req.method === 'GET' && tail === 'since') {
+    manager.markConnected(session.playerId, session.roomId, true)
     const seq = Number(url.searchParams.get('seq') ?? '0')
     json(res, 200, manager.eventsSince(session.roomId, session.playerId, Number.isFinite(seq) ? seq : 0))
     return
@@ -180,6 +192,7 @@ async function handleApi(
     assertMutatingHeaders(req)
     const command = await readJson<ClientCommand>(req)
     try {
+      manager.markConnected(session.playerId, session.roomId, command.type === 'ping')
       const result = await manager.command(session.roomId, session.playerId, command, manager.isHostCookie(cookies.ddz_host))
       json(res, 200, result)
     } catch (error) {
