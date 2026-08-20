@@ -69,6 +69,25 @@ describe('table chrome', () => {
     expect(styles).not.toMatch(/\.githubLink \{[^}]*margin-left: auto/)
   })
 
+  it('marks local-only rooms in yellow and points at settings to share', () => {
+    const host = readFileSync(join(process.cwd(), 'src/client/HostApp.tsx'), 'utf8')
+    const bar = readFileSync(join(process.cwd(), 'src/client/InviteDialog.tsx'), 'utf8')
+    const lobby = readFileSync(join(process.cwd(), 'src/client/LobbyView.tsx'), 'utf8')
+    const styles = readFileSync(join(process.cwd(), 'src/client/styles.module.css'), 'utf8')
+    expect(bar).toContain("LOCAL_ONLY_COPY = '去设置里填对外地址，才能分享给朋友一起玩。'")
+    expect(bar).toContain('localOnlyBadge')
+    expect(bar).toContain('<LocalOnlyHint variant="badge" />')
+    expect(bar).not.toContain('className={css.muted}>仅本机')
+    expect(lobby).toContain('shareable ? null : <LocalOnlyHint />')
+    expect(host).toContain('<LocalOnlyHint variant="bar" />')
+    expect(host).toContain('configShareable')
+    expect(host).toContain('ready.shareable')
+    expect(styles).toContain('.localOnlyBadge')
+    expect(styles).toContain('#ffe066')
+    expect(styles).toContain('.localOnlyNotice')
+    expect(styles).toContain('.localOnlyBar')
+  })
+
   it('formats stake, bid, phase timer and balance on one meta line', () => {
     expect(tableMeta(view(), 28)).toBe('3人经典 · 底注 1M · 2倍 · 出牌 28秒')
     expect(tableMeta(view({ phase: 'bidding', bid: 0 }), 60)).toBe('3人经典 · 底注 1M · 未叫 · 叫抢 60秒')

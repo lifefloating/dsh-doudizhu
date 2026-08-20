@@ -6,7 +6,7 @@ import { doudizhuTabHash, parseDoudizhuHash } from './hash.ts'
 import {
   connectChannel, createRoom, fetchPluginReady, joinRoom, leaveHere, peekRoom, sendCommand, type CreateRoomResponse,
 } from './host-api.ts'
-import { GithubLink, RoomCodeBar } from './InviteDialog.tsx'
+import { GithubLink, LocalOnlyHint, RoomCodeBar } from './InviteDialog.tsx'
 import { LobbyView } from './LobbyView.tsx'
 import { ALREADY_IN_ROOM_MESSAGE, claimRoomPresence, roomOccupiedHere } from './presence.ts'
 import { RoomPreviewCard } from './RoomPreviewCard.tsx'
@@ -29,6 +29,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<RoomPreview | null>(null)
   const [state, setState] = useState(emptyState)
   const [turnTimeoutSec, setTurnTimeoutSec] = useState(DEFAULT_TURN_TIMEOUT_SEC)
+  const [configShareable, setConfigShareable] = useState(false)
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -71,8 +72,11 @@ export function HostApp({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let cancelled = false
     void fetchPluginReady().then((ready) => {
-      if (cancelled || typeof ready.turnTimeoutMs !== 'number') return
-      setTurnTimeoutSec(turnTimeoutSecFromMs(ready.turnTimeoutMs))
+      if (cancelled) return
+      if (typeof ready.turnTimeoutMs === 'number') {
+        setTurnTimeoutSec(turnTimeoutSecFromMs(ready.turnTimeoutMs))
+      }
+      if (typeof ready.shareable === 'boolean') setConfigShareable(ready.shareable)
     }).catch(() => { /* keep default */ })
     return () => { cancelled = true }
   }, [])
@@ -247,6 +251,9 @@ export function HostApp({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       {state.error ? <div className={css.banner}>{state.error}</div> : null}
+      {view && !state.shareable && view.room.phase === 'waiting' && view.you.playerId === view.room.hostPlayerId
+        ? <LocalOnlyHint variant="bar" />
+        : null}
       {!state.view
         ? preview
           ? (
@@ -284,7 +291,7 @@ export function HostApp({ onClose }: { onClose: () => void }) {
             roomCode={state.roomCode}
             sitUrl={state.sitUrl}
             watchUrl={state.watchUrl}
-            shareable={state.shareable}
+            shareable={state.roomCode ? state.shareable : configShareable}
             welcomeAtoms={DEFAULT_WELCOME_ATOMS}
             turnTimeoutSec={turnTimeoutSec}
             join={{

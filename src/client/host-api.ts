@@ -53,6 +53,7 @@ export interface PluginReady {
   ok: boolean
   plugin: string
   turnTimeoutMs?: number
+  shareable?: boolean
 }
 
 export function fetchPluginReady() {

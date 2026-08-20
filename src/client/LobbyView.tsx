@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_STAKE_M, formatM, seatCapAtoms, stakeAtomsFromM, STAKE_LADDER_M } from '../settle/math.ts'
 import type { SeatCount } from '../types.ts'
-import { InviteDialog } from './InviteDialog.tsx'
+import { InviteDialog, LocalOnlyHint } from './InviteDialog.tsx'
 import { JoinForm } from './JoinForm.tsx'
 import css from './styles.module.css'
 
@@ -89,6 +89,7 @@ export function LobbyView({
           : (
             <>
               <h2>创建房间</h2>
+              {shareable ? null : <LocalOnlyHint />}
               <p className={css.hint}>好友局信房主这台机器上的账本。积分不是 DeepSeek 平台余额。</p>
               <div className={css.createFields}>
                 <label className={`${css.field} ${css.fieldWide}`}>

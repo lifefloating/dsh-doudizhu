@@ -23,6 +23,7 @@ describe('wire JSON', () => {
     expect(source).toContain("path === '/api/ready'")
     expect(source).toContain("plugin: 'dsh-poker'")
     expect(source).toContain('turnTimeoutMs: config.turnTimeoutMs')
+    expect(source).toContain("shareable: config.publicBaseUrl !== ''")
     const readyAt = source.indexOf("path === '/api/ready'")
     const sessionAt = source.indexOf('sessionByCookie')
     expect(readyAt).toBeGreaterThan(0)

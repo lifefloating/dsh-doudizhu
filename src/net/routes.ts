@@ -154,6 +154,7 @@ async function handleApi(
       ok: true,
       plugin: 'dsh-poker',
       turnTimeoutMs: config.turnTimeoutMs,
+      shareable: config.publicBaseUrl !== '',
     })
     return
   }

@@ -2,6 +2,24 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { PLUGIN_REPO } from './links.ts'
 import css from './styles.module.css'
 
+export const LOCAL_ONLY_COPY = '去设置里填对外地址，才能分享给朋友一起玩。'
+
+export function LocalOnlyHint({
+  variant = 'card',
+}: {
+  variant?: 'card' | 'bar' | 'badge'
+}) {
+  if (variant === 'badge') {
+    return <span className={css.localOnlyBadge} title={LOCAL_ONLY_COPY}>仅本机</span>
+  }
+  return (
+    <div className={variant === 'bar' ? css.localOnlyBar : css.localOnlyNotice} role="status">
+      <span className={css.localOnlyBadge}>仅本机</span>
+      {LOCAL_ONLY_COPY}
+    </div>
+  )
+}
+
 export function InviteDialog({
   roomCode, sitUrl, shareable,
 }: {
@@ -29,10 +47,7 @@ export function InviteDialog({
           </>
         )
         : (
-          <p className={`${css.hint} ${css.warn}`}>
-            要给别的机器用，先在插件设置里填 publicBaseUrl（named tunnel 或反代到本机端口）。
-            生产环境的 dsh web 不能绑 0.0.0.0，所以局域网 IP 用不了。本机再开一个 DSH 标签点 dsh-poker 填房号，或打开 {sitUrl || 'loopback 邀请页'} 进入斗地主 tab。
-          </p>
+          <LocalOnlyHint />
         )}
     </div>
   )
@@ -85,7 +100,7 @@ export function RoomCodeBar({
       {shareable && sitUrl
         ? <button type="button" className={css.ghost} onClick={() => { void navigator.clipboard.writeText(sitUrl) }}>复制链接</button>
         : sitUrl
-          ? <span className={css.muted}>仅本机</span>
+          ? <LocalOnlyHint variant="badge" />
           : null}
       {meta ? <span className={css.codeMeta}>{meta}</span> : null}
       {aside}
