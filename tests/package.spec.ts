@@ -14,6 +14,8 @@ describe('DSH 插件清单', () => {
       publishConfig: { access: string; registry: string }
       scripts: Record<string, string>
       license: string
+      peerDependencies: Record<string, string>
+      peerDependenciesMeta: Record<string, { optional?: boolean }>
       dsh: { bundle: { patch: string }; client: { inject: string[]; platform: string } }
     }
 
@@ -41,6 +43,11 @@ describe('DSH 插件清单', () => {
     expect(packageJson.license).toBe('MIT')
     expect(packageJson.dsh.bundle.patch).toBe('./cordis.patch.yml')
     expect(packageJson.dsh.client.platform).toBe('web')
+    const peers = Object.keys(packageJson.peerDependencies ?? {})
+    expect(peers).toContain('@deepseek-ai/cordis')
+    for (const name of peers) {
+      expect(packageJson.peerDependenciesMeta?.[name]).toEqual({ optional: true })
+    }
     const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8')
     const escapedVersion = packageJson.version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     expect(changelog).toMatch(new RegExp(`^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm'))
