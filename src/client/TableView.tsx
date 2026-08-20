@@ -5,6 +5,7 @@ import {
 } from '../types.ts'
 import { CardBack } from './CardBack.tsx'
 import { ChatLog } from './ChatLog.tsx'
+import { ChatComposer, DanmakuLayer } from './ChatDock.tsx'
 import { DealAnimation } from './DealAnimation.tsx'
 import { FlipCard } from './FlipCard.tsx'
 import { HandFan } from './HandFan.tsx'
@@ -58,13 +59,14 @@ export function TableView({
   const bidWaitCopy = biddingWaitCopy(view)
   return (
     <div className={css.table} data-table>
+      <DanmakuLayer lines={view.chat} selfId={view.you.playerId} />
       {waiting
-        ? <div className={css.hint}>{seated}/{count} 人入座。好友点准备，齐了由房主开打。</div>
+        ? <div className={css.waitingPill}><span className={css.liveDot} /> {seated}/{count} 人入座。好友点准备，齐了由房主开打。</div>
         : null}
       {laiZi.length > 0
-        ? <div className={css.muted}>癞子：{laiZi.join('、')}</div>
+        ? <div className={css.wildPill}>癞子牌 · {laiZi.join('、')}</div>
         : null}
-      <div className={`${css.opponents} ${opponents.length > 2 ? css.opponentsThree : ''}`}>
+      <div className={`${css.opponents} ${opponents.length > 2 ? css.opponentsThree : ''}`} aria-label="其他玩家">
         {opponents.map((seat, index) => (
           <SeatRow
             key={seat.seat}
@@ -81,15 +83,19 @@ export function TableView({
           />
         ))}
       </div>
-      <div className={css.centerPlay} data-play-zone>
+      <div className={css.centerPlay} data-play-zone aria-label="牌桌公共区域">
         <ChatLog lines={view.chat} />
         {phase === 'dealing'
           ? <DealAnimation seatCount={count} selfSeat={layoutSelf} />
-          : view.lastPlays.slice(-1).map((play, index) => (
-            play.type === 'pass'
-              ? <span key={index} className={css.muted}>过</span>
-              : <PlayFly key={`${play.seq}-${index}`} cards={play.cards} laiZiRanks={laiZi} />
-          ))}
+          : view.lastPlays.length > 0
+            ? view.lastPlays.slice(-1).map((play, index) => (
+                play.type === 'pass'
+                  ? <span key={index} className={css.passMark}>过</span>
+                  : <PlayFly key={`${play.seq}-${index}`} cards={play.cards} laiZiRanks={laiZi} />
+              ))
+            : phase === 'playing'
+              ? <span className={css.tableWatermark}>等待首轮出牌</span>
+              : null}
         {toastKey ? <YourTurnToast turnKey={toastKey} /> : null}
         {bidWaitCopy
           ? <p className={css.tableStatus} data-bid-wait="">{bidWaitCopy}</p>
@@ -120,7 +126,7 @@ export function TableView({
           )
           : null}
       </div>
-      <div className={css.bottom} data-hole="">
+      <div className={css.bottom} data-hole="" aria-label="底牌">
         {view.bottom
           ? view.bottom.map((card, index) => (
             <FlipCard key={card} card={card} faceUp laiZiRanks={laiZi} delay={index * 0.08} />
@@ -202,19 +208,14 @@ export function TableView({
         )}
       {!view.you.spectator
         ? (
-          <form
-            className={css.chatComposer}
-            data-chat-composer=""
-            onSubmit={(event) => {
-              event.preventDefault()
-              const data = new FormData(event.currentTarget)
-              const text = String(data.get('chat') ?? '')
-              if (text) onChat(text)
-              event.currentTarget.reset()
-            }}
-          >
-            <input className={`${css.input} ${css.chatInput}`} name="chat" maxLength={80} placeholder="聊天" autoComplete="off" />
-          </form>
+          <div className={css.chatComposer} data-chat-composer="">
+            <ChatComposer
+              seats={seats}
+              selfId={view.you.playerId}
+              canSend
+              onSend={onChat}
+            />
+          </div>
         )
         : null}
     </div>

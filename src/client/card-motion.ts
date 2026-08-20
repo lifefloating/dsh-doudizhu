@@ -12,13 +12,15 @@ export function fanPose(
   index: number,
   selected = false,
   hovered = false,
+  availableWidth?: number,
+  cardWidth = 88,
 ): CardPose {
   if (count <= 1) {
     return { x: 0, y: selected ? -FAN_LIFT_SELECTED : hovered ? -FAN_LIFT_HOVER : 0, rotation: 0 }
   }
   const mid = (count - 1) / 2
   const offset = index - mid
-  const gap = Math.min(56, 640 / count)
+  const gap = fanGap(count, availableWidth, cardWidth)
   const rotStep = Math.min(6.5, 78 / count)
   const rotation = offset * rotStep
   const x = offset * gap
@@ -27,6 +29,16 @@ export function fanPose(
   if (selected) y -= FAN_LIFT_SELECTED
   else if (hovered) y -= FAN_LIFT_HOVER
   return { x, y, rotation }
+}
+
+export function fanWidth(count: number, availableWidth?: number, cardWidth = 88): number {
+  if (count <= 1) return cardWidth
+  return Math.round((count - 1) * fanGap(count, availableWidth, cardWidth) + cardWidth)
+}
+
+function fanGap(count: number, availableWidth: number | undefined, cardWidth: number): number {
+  if (availableWidth === undefined) return Math.min(56, 640 / count)
+  return Math.min(56, Math.max(0, (availableWidth - cardWidth) / (count - 1)))
 }
 
 export function prefersReducedMotion(): boolean {

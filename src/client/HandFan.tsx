@@ -3,7 +3,7 @@ import gsap from 'gsap'
 import Draggable from 'gsap/Draggable'
 import type { CardId } from '../types.ts'
 import { CardFace } from './CardFace.tsx'
-import { fanPose, prefersReducedMotion } from './card-motion.ts'
+import { fanPose, fanWidth, prefersReducedMotion } from './card-motion.ts'
 import css from './styles.module.css'
 
 gsap.registerPlugin(Draggable)
@@ -31,6 +31,7 @@ export function HandFan({
   const onPlayRef = useRef(onPlay)
   const canPlayRef = useRef(canPlay)
   const [hovered, setHovered] = useState<CardId | null>(null)
+  const [fanMetrics, setFanMetrics] = useState({ availableWidth: 728, cardWidth: 88 })
   selectedRef.current = selected
   cardsRef.current = cards
   onToggleRef.current = onToggle
@@ -42,6 +43,27 @@ export function HandFan({
   const selectedSet = new Set(selected)
 
   useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    const container = wrap?.parentElement
+    if (!container) return undefined
+    const update = (): void => {
+      const firstCard = cardsRef.current[0]
+      const first = firstCard ? itemRefs.current.get(firstCard) : null
+      const cardWidth = first?.getBoundingClientRect().width ?? 88
+      const availableWidth = Math.max(cardWidth, container.clientWidth - 16)
+      setFanMetrics((current) => (
+        current.availableWidth === availableWidth && current.cardWidth === cardWidth
+          ? current
+          : { availableWidth, cardWidth }
+      ))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(container)
+    return () => { observer.disconnect() }
+  }, [])
+
+  useLayoutEffect(() => {
     const reduced = prefersReducedMotion()
     const picked = new Set(selectedKey === '' ? [] : selectedKey.split(','))
     const nodes: HTMLButtonElement[] = []
@@ -51,7 +73,7 @@ export function HandFan({
       if (!node) return
       nodes.push(node)
       if (node.dataset.dragging) return
-      const pose = fanPose(count, index, picked.has(card), hovered === card)
+      const pose = fanPose(count, index, picked.has(card), hovered === card, fanMetrics.availableWidth, fanMetrics.cardWidth)
       const next = { x: pose.x, y: pose.y, rotation: pose.rotation, transformOrigin: '50% 100%' }
       const first = node.dataset.posed !== '1'
       if (first || reduced) {
@@ -66,7 +88,7 @@ export function HandFan({
         if (!node.dataset.dragging) gsap.killTweensOf(node)
       }
     }
-  }, [count, hovered, key, selectedKey])
+  }, [count, fanMetrics.availableWidth, fanMetrics.cardWidth, hovered, key, selectedKey])
 
   useLayoutEffect(() => {
     if (prefersReducedMotion()) return undefined
@@ -96,7 +118,7 @@ export function HandFan({
           const next = picked.includes(card) ? picked : [...picked, card]
           if (hitPlay && canPlayRef.current) onPlayRef.current?.(next)
           else if (hitPlay && !picked.includes(card)) onToggleRef.current(card)
-          const pose = fanPose(list.length, index < 0 ? 0 : index, next.includes(card), false)
+          const pose = fanPose(list.length, index < 0 ? 0 : index, next.includes(card), false, fanMetrics.availableWidth, fanMetrics.cardWidth)
           gsap.to(node, {
             x: pose.x,
             y: pose.y,
@@ -113,11 +135,11 @@ export function HandFan({
     return () => {
       for (const drag of created) drag.kill()
     }
-  }, [key])
+  }, [fanMetrics.availableWidth, fanMetrics.cardWidth, key])
 
   return (
     <div className={css.hand} data-hand>
-      <div className={css.handInner} ref={wrapRef} style={{ width: fanWidth(count) }}>
+      <div className={css.handInner} ref={wrapRef} style={{ width: fanWidth(count, fanMetrics.availableWidth, fanMetrics.cardWidth) }}>
         {cards.map((card, index) => (
           <button
             type="button"
@@ -143,10 +165,4 @@ export function HandFan({
       </div>
     </div>
   )
-}
-
-function fanWidth(count: number): number {
-  if (count <= 1) return 88
-  const gap = Math.min(56, 640 / count)
-  return Math.round((count - 1) * gap + 88)
 }

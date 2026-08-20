@@ -244,10 +244,25 @@ export function HostApp({ onClose }: { onClose: () => void }) {
               aside={<span className={css.muted}>{tableBalance(view)}</span>}
             />
           )
-          : <div className={css.brand}>斗地主</div>}
+          : (
+            <div className={css.brand}>
+              <span className={css.brandMark} aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22">
+                  <path fill="currentColor" d="M12 2C10.8 4.5 5 7.2 5 11a4 4 0 0 0 6 3.46V17H8v2h8v-2h-3v-2.54A4 4 0 0 0 19 11c0-3.8-5.8-6.5-7-9Z" />
+                </svg>
+              </span>
+              <span className={css.brandCopy}>
+                <strong>斗地主</strong>
+                <small>DOU DIZHU · HOST TABLE</small>
+              </span>
+            </div>
+          )}
         <div className={css.topbarActions} data-topbar-actions="">
           <GithubLink />
-          <button type="button" className={css.close} onClick={onClose}>关闭</button>
+          <button type="button" className={css.close} aria-label="关闭牌桌" onClick={onClose}>
+            <span className={css.closeLong}>关闭牌桌</span>
+            <span className={css.closeShort} aria-hidden="true">关闭</span>
+          </button>
         </div>
       </div>
       {state.error ? <div className={css.banner}>{state.error}</div> : null}

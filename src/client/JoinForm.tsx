@@ -18,24 +18,6 @@ export function JoinForm({
 }) {
   return (
     <div className={css.joinForm}>
-      <div className={css.roleHero}>
-        <figure className={css.roleHeroItem}>
-          <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
-          <figcaption><SeatTags role="landlord" /></figcaption>
-        </figure>
-        <figure className={css.roleHeroItem}>
-          <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
-          <figcaption><SeatTags role="farmer" /></figcaption>
-        </figure>
-        <figure className={css.roleHeroItem}>
-          <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
-          <figcaption><SeatTags role="farmer" /></figcaption>
-        </figure>
-        <figure className={css.roleHeroItem}>
-          <img className={css.roleHeroImg} src={ROLE_ICONS.farmerC} alt="农民" />
-          <figcaption><SeatTags role="farmer" /></figcaption>
-        </figure>
-      </div>
       <p className={css.hint}>先看房间信息，点确定后再进。先到的人入座，坐满或已经开打后来的人观战。出牌每手 120 秒。</p>
       <div className={css.joinFields}>
         {showInvite
@@ -68,6 +50,24 @@ export function JoinForm({
           {joining ? '查询中…' : '查看房间'}
         </button>
         {error ? <p className={css.error}>{error}</p> : null}
+      </div>
+      <div className={css.roleHero}>
+        <figure className={css.roleHeroItem}>
+          <img className={css.roleHeroImg} src={ROLE_ICONS.landlord} alt="地主" />
+          <figcaption><SeatTags role="landlord" /></figcaption>
+        </figure>
+        <figure className={css.roleHeroItem}>
+          <img className={css.roleHeroImg} src={ROLE_ICONS.farmer} alt="农民" />
+          <figcaption><SeatTags role="farmer" /></figcaption>
+        </figure>
+        <figure className={css.roleHeroItem}>
+          <img className={css.roleHeroImg} src={ROLE_ICONS.farmerB} alt="农民" />
+          <figcaption><SeatTags role="farmer" /></figcaption>
+        </figure>
+        <figure className={css.roleHeroItem}>
+          <img className={css.roleHeroImg} src={ROLE_ICONS.farmerC} alt="农民" />
+          <figcaption><SeatTags role="farmer" /></figcaption>
+        </figure>
       </div>
     </div>
   )
