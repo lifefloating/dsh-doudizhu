@@ -62,14 +62,27 @@ export function SeatRow({
       </div>
       {revealed && revealed.length > 0
         ? (
-          <div className={css.miniHand}>
+          <div className={css.miniHand} data-revealed-hand="" aria-label={`${seat.displayName ?? '玩家'}的明牌`}>
             {revealed.map((card, index) => (
               <FlipCard key={card} card={card} faceUp laiZiRanks={laiZiRanks} delay={index * 0.04} />
             ))}
           </div>
         )
         : seat.playerId && seat.cardsLeft > 0
-          ? <CardBack count={seat.cardsLeft} compact landlord={seat.role === 'landlord'} />
+          ? (
+            <div
+              className={css.concealedHand}
+              data-concealed-hand=""
+              aria-label={`${seat.displayName ?? '玩家'}有 ${seat.cardsLeft} 张牌，未明牌`}
+            >
+              <span className={css.cardsLeft} aria-hidden="true">{seat.cardsLeft}</span>
+              <div className={css.miniHand} aria-hidden="true">
+                {Array.from({ length: seat.cardsLeft }, (_, index) => (
+                  <CardBack key={index} landlord={seat.role === 'landlord'} />
+                ))}
+              </div>
+            </div>
+          )
           : null}
     </div>
   )

@@ -2199,22 +2199,94 @@
   cursor: default;
 }
 
+.concealedHand {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.seatRight .concealedHand {
+  align-items: flex-end;
+}
+
+.seatCenter .concealedHand {
+  align-items: center;
+}
+
 .miniHand {
   display: flex;
-  max-width: 320px;
-  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-start;
+  column-gap: 0;
+  row-gap: 3px;
+  overflow: visible;
 }
-.miniHand > * {
-  width: 52px;
-  height: 73px;
-  margin-left: -26px;
+
+.miniHand > *,
+.miniHand .flipScene {
+  width: clamp(34px, 3.2vw, 42px);
+  height: clamp(48px, 4.5vw, 59px);
+  margin-left: -16px;
   flex: none;
 }
-.miniHand .flipScene {
-  width: 52px;
-  height: 73px;
+
+.miniHand > *:first-child {
+  margin-left: 0;
 }
-.miniHand > *:first-child { margin-left: 0; }
+
+.seatRight .miniHand {
+  justify-content: flex-end;
+}
+
+.seatCenter .miniHand {
+  justify-content: center;
+}
+
+.opponentsThree .miniHand {
+  row-gap: 2px;
+}
+
+.opponentsThree .miniHand > *,
+.opponentsThree .miniHand .flipScene {
+  width: 32px;
+  height: 45px;
+  margin-left: -12px;
+}
+
+.opponentsThree .miniHand > *:first-child {
+  margin-left: 0;
+}
+
+.miniHand > .remain {
+  display: block;
+  max-width: none;
+}
+
+.miniHand .remain .backs {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.miniHand .remain .backs > * {
+  margin-left: 0;
+}
+
+.miniHand .remain .cardBack {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-radius: 8px;
+}
 .qr { width: 132px; height: 132px; background: white; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, #e8e8e8); }
 
 .timer {
